@@ -1,0 +1,58 @@
+{
+  "current_model": "meta-llama/Llama-3.2-1B",
+  "use_gpu": true,
+  "generation_params": {
+    "max_new_tokens": 100,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "do_sample": true
+  },
+  "available_models": {
+    "gpt2-large": {
+      "name": "openai-community/gpt2-large",
+      "description": "GPT-2 Large model (774M parameters)",
+      "type": "causal_lm"
+    },
+    "gpt2-medium": {
+      "name": "openai-community/gpt2-medium",
+      "description": "GPT-2 Medium model (355M parameters)",
+      "type": "causal_lm"
+    },
+    "gpt2": {
+      "name": "openai-community/gpt2",
+      "description": "GPT-2 Base model (124M parameters)",
+      "type": "causal_lm"
+    },
+    "distilgpt2": {
+      "name": "distilgpt2",
+      "description": "DistilGPT-2 (82M parameters, faster)",
+      "type": "causal_lm"
+    },
+    "llama2-7b": {
+      "name": "meta-llama/Llama-2-7b-chat-hf",
+      "description": "LLaMA 2 7B Chat model (requires access token)",
+      "type": "causal_lm"
+    },
+    "mistral-7b": {
+      "name": "mistralai/Mistral-7B-Instruct-v0.1",
+      "description": "Mistral 7B Instruct model",
+      "type": "causal_lm"
+    },
+    "phi-2": {
+      "name": "microsoft/phi-2",
+      "description": "Microsoft Phi-2 (2.7B parameters)",
+      "type": "causal_lm"
+    },
+    "codegen": {
+      "name": "Salesforce/codegen-350M-mono",
+      "description": "CodeGen model for code generation",
+      "type": "causal_lm"
+    }
+  },
+  "chat_settings": {
+    "max_history": 10,
+    "show_model_info": true,
+    "save_conversations": false,
+    "conversation_file": "conversations.json"
+  }
+}
