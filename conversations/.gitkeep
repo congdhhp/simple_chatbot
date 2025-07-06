@@ -1,0 +1,2 @@
+# This file ensures the conversations directory is tracked by git
+# Conversation files (*.json) are ignored but this directory structure is preserved
