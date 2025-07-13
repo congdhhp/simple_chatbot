@@ -1,5 +1,5 @@
 # Model configurations for the CLI chatbot
-# Each model has its own configuration with optimized parameters
+# Each model has its own configuration with optimized parameters and settings
 
 models:
   llama-3.2-3b-instruct:
@@ -19,7 +19,13 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
-    
+    settings:
+      max_conversation_history: 10
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
+
   llama-3.2-1b-instruct:
     model_id: "meta-llama/Llama-3.2-1B-Instruct"
     display_name: "Llama 3.2 1B Instruct"
@@ -37,6 +43,38 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 15  # Lighter model can handle more history
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
+
+  llama-3.2-1b-instruct-swtbot:
+    model_id: "C:\\Users\\pc\\Desktop\\llm\\custom-code-finetune\\minimal_model"
+    display_name: "Llama 3.2 1B Instruct-swtbot (LoRA Fine-tuned)"
+    description: "Meta's Llama 3.2 1B instruction-tuned model with custom LoRA adapter"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 512
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+      pad_token_id: 128001
+    system_prompt: |
+      You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
+      Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 15  # Lighter model can handle more history
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
+      # LoRA adapter path for fine-tuned model
+      # lora_adapter_path: "C:\\Users\\pc\\Desktop\\llm\\custom-code-finetune\\minimal_model"
 
   mistral-7b-instruct:
     model_id: "mistralai/Mistral-7B-Instruct-v0.3"
@@ -54,14 +92,12 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 8  # Larger model, slightly less history
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
 
 # Default model to use when starting the chatbot
 default_model: "llama-3.2-3b-instruct"
-
-# Global settings
-settings:
-  max_conversation_history: 10
-  save_conversations: true
-  conversation_dir: "conversations"
-  use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
-  log_level: "INFO"

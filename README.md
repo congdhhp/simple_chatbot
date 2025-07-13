@@ -79,7 +79,7 @@ Once the chatbot is running, you can use these commands:
 
 ### Model Configuration
 
-Models are configured in `config/models.yaml`. Each model has:
+Models are configured in `config/models.yaml`. Each model has its own configuration and settings:
 
 ```yaml
 models:
@@ -98,18 +98,23 @@ models:
       repetition_penalty: 1.1
     system_prompt: |
       Your system prompt here
+    settings:
+      max_conversation_history: 10
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (shared across projects)
+      log_level: "INFO"
 ```
 
-### Global Settings
+### Per-Model Settings
 
-```yaml
-settings:
-  max_conversation_history: 10
-  save_conversations: true
-  conversation_dir: "conversations"
-  use_hf_cache: true  # Use Hugging Face default cache (shared across projects)
-  log_level: "INFO"
-```
+Each model can have its own customized settings:
+
+- **max_conversation_history**: Number of previous messages to keep in context
+- **save_conversations**: Whether to save conversation history to files
+- **conversation_dir**: Directory to save conversations
+- **use_hf_cache**: Whether to use shared HuggingFace cache or local cache
+- **log_level**: Logging level for this model
 
 ## Memory Requirements
 
@@ -219,6 +224,12 @@ models:
       # ... other parameters
     system_prompt: |
       Your custom system prompt
+    settings:
+      max_conversation_history: 10
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
 ```
 
 ## Troubleshooting

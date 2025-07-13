@@ -14,25 +14,46 @@ class ConversationManager:
     
     def __init__(self, config_manager: ConfigManager):
         """Initialize the conversation manager.
-        
+
         Args:
             config_manager: Configuration manager instance
         """
         self.config_manager = config_manager
         self.conversation_history: List[Dict[str, Any]] = []
-        
+        self.current_model_name = None
+
         # Setup logging
         self.logger = logging.getLogger(__name__)
-        
-        # Get settings
-        settings = self.config_manager.get_settings()
+
+        # Initialize with default model settings
+        self._update_settings_for_model(self.config_manager.get_default_model())
+
+    def _update_settings_for_model(self, model_name: str) -> None:
+        """Update settings based on the current model.
+
+        Args:
+            model_name: Name of the model to get settings for
+        """
+        settings = self.config_manager.get_settings(model_name)
         self.max_history = settings.get('max_conversation_history', 10)
         self.save_conversations = settings.get('save_conversations', True)
-        
+
         # Create conversations directory
         self.conversations_dir = Path(settings.get('conversation_dir', 'conversations'))
         if self.save_conversations:
             self.conversations_dir.mkdir(exist_ok=True)
+
+        self.current_model_name = model_name
+        self.logger.info(f"Updated conversation settings for model: {model_name}")
+
+    def set_current_model(self, model_name: str) -> None:
+        """Set the current model and update settings accordingly.
+
+        Args:
+            model_name: Name of the current model
+        """
+        if model_name != self.current_model_name:
+            self._update_settings_for_model(model_name)
     
     def add_message(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Add a message to the conversation history.
