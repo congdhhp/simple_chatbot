@@ -4,7 +4,6 @@ import os
 import torch
 import logging
 from typing import Dict, Any, Optional, Tuple
-from pathlib import Path
 from transformers import (
     AutoTokenizer, 
     AutoModelForCausalLM, 
@@ -32,19 +31,9 @@ class ModelManager:
         # Setup logging
         self.logger = logging.getLogger(__name__)
 
-        # Setup cache directory
-        settings = self.config_manager.get_settings()
-        self.use_hf_cache = settings.get('use_hf_cache', True)
-
-        if self.use_hf_cache:
-            # Use Hugging Face default cache (shared across projects)
-            self.cache_dir = None  # Let HF use default cache
-            self.logger.info("Using Hugging Face default cache (~/.cache/huggingface)")
-        else:
-            # Use local cache directory
-            self.cache_dir = Path(settings.get('cache_dir', 'model_cache'))
-            self.cache_dir.mkdir(exist_ok=True)
-            self.logger.info(f"Using local cache directory: {self.cache_dir}")
+        # Cache directory will be set when loading a model
+        self.use_hf_cache = True  # Default value, will be updated per model
+        self.cache_dir = None
         
         # Check CUDA availability
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,10 +56,24 @@ class ModelManager:
             if model_name is None:
                 model_name = self.config_manager.get_default_model()
             
-            # Get model configuration
+            # Get model configuration and settings
             model_config = self.config_manager.get_model_config(model_name)
+            model_settings = self.config_manager.get_settings(model_name)
             model_id = model_config['model_id']
-            
+
+            # Setup cache directory based on model settings
+            self.use_hf_cache = model_settings.get('use_hf_cache', True)
+            if self.use_hf_cache:
+                # Use Hugging Face default cache (shared across projects)
+                self.cache_dir = None  # Let HF use default cache
+                self.logger.info("Using Hugging Face default cache (~/.cache/huggingface)")
+            else:
+                # Use local cache directory
+                from pathlib import Path
+                self.cache_dir = Path(model_settings.get('cache_dir', 'model_cache'))
+                self.cache_dir.mkdir(exist_ok=True)
+                self.logger.info(f"Using local cache directory: {self.cache_dir}")
+
             self.logger.info(f"Loading model: {model_config['display_name']} ({model_id})")
             
             # Setup quantization if needed (for memory efficiency)

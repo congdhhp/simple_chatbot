@@ -1,5 +1,5 @@
 # Model configurations for the CLI chatbot
-# Each model has its own configuration with optimized parameters
+# Each model has its own configuration with optimized parameters and settings
 
 models:
   llama-3.2-3b-instruct:
@@ -19,7 +19,13 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
-    
+    settings:
+      max_conversation_history: 10
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
+
   llama-3.2-1b-instruct:
     model_id: "meta-llama/Llama-3.2-1B-Instruct"
     display_name: "Llama 3.2 1B Instruct"
@@ -37,6 +43,12 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 15  # Lighter model can handle more history
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
 
   mistral-7b-instruct:
     model_id: "mistralai/Mistral-7B-Instruct-v0.3"
@@ -54,14 +66,12 @@ models:
     system_prompt: |
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 8  # Larger model, slightly less history
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
+      log_level: "INFO"
 
 # Default model to use when starting the chatbot
 default_model: "llama-3.2-3b-instruct"
-
-# Global settings
-settings:
-  max_conversation_history: 10
-  save_conversations: true
-  conversation_dir: "conversations"
-  use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
-  log_level: "INFO"

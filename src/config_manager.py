@@ -29,19 +29,19 @@ class ConfigManager:
     
     def _validate_config(self) -> None:
         """Validate the loaded configuration."""
-        required_keys = ['models', 'default_model', 'settings']
+        required_keys = ['models', 'default_model']
         for key in required_keys:
             if key not in self.config:
                 raise ValueError(f"Missing required configuration key: {key}")
-        
+
         # Validate default model exists
         default_model = self.config['default_model']
         if default_model not in self.config['models']:
             raise ValueError(f"Default model '{default_model}' not found in models configuration")
-        
+
         # Validate each model configuration
         for model_name, model_config in self.config['models'].items():
-            required_model_keys = ['model_id', 'display_name', 'generation_config']
+            required_model_keys = ['model_id', 'display_name', 'generation_config', 'settings']
             for key in required_model_keys:
                 if key not in model_config:
                     raise ValueError(f"Missing required key '{key}' in model '{model_name}'")
@@ -74,9 +74,22 @@ class ConfigManager:
             for name, config in self.config['models'].items()
         }
     
-    def get_settings(self) -> Dict[str, Any]:
-        """Get global settings."""
-        return self.config['settings']
+    def get_settings(self, model_name: Optional[str] = None) -> Dict[str, Any]:
+        """Get settings for a specific model.
+
+        Args:
+            model_name: Name of the model. If None, returns default model settings.
+
+        Returns:
+            Model settings dictionary
+        """
+        if model_name is None:
+            model_name = self.config['default_model']
+
+        if model_name not in self.config['models']:
+            raise ValueError(f"Model '{model_name}' not found in configuration")
+
+        return self.config['models'][model_name]['settings']
     
     def get_default_model(self) -> str:
         """Get the default model name."""

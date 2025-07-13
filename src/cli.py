@@ -3,7 +3,6 @@
 import click
 import logging
 import sys
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -137,6 +136,8 @@ class ChatbotCLI:
         # Load new model
         if self.model_manager.load_model(model_name):
             self.console.print(f"[green]✓ Model loaded successfully![/green]")
+            # Update conversation manager with new model settings
+            self.conversation_manager.set_current_model(model_name)
         else:
             self.console.print(f"[red]✗ Failed to load model[/red]")
 
@@ -266,6 +267,10 @@ class ChatbotCLI:
                     if not self.model_manager.load_model():
                         self.console.print("[red]Failed to load model. Please try switching to a different model.[/red]")
                         continue
+                    else:
+                        # Update conversation manager with default model settings
+                        default_model = self.config_manager.get_default_model()
+                        self.conversation_manager.set_current_model(default_model)
                 
                 # Generate response
                 self.console.print("\n[dim]🤖 Thinking...[/dim]")
@@ -312,6 +317,9 @@ def main(config, model):
         cli.console.print(f"\n[yellow]Loading specified model: {model}...[/yellow]")
         if not cli.model_manager.load_model(model):
             cli.console.print(f"[red]Failed to load model: {model}[/red]")
+        else:
+            # Update conversation manager with specified model settings
+            cli.conversation_manager.set_current_model(model)
     
     # Start chat loop
     cli.run_chat_loop()
