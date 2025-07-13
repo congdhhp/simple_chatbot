@@ -7,6 +7,7 @@ click>=8.0.0
 colorama>=0.4.6
 rich>=13.0.0
 huggingface-hub>=0.17.0
+peft>=0.7.0  # For LoRA adapter support
 
 # Optional: for better performance
 bitsandbytes>=0.41.0
