@@ -1,15 +1,16 @@
 # Model configurations for the CLI chatbot
+# Optimized for Ubuntu 24.04 WSL2 + RTX 5060 Ti 16GB + CUDA 12.0
 # Each model has its own configuration with optimized parameters and settings
 
 models:
   llama-3.2-3b-instruct:
     model_id: "meta-llama/Llama-3.2-3B-Instruct"
     display_name: "Llama 3.2 3B Instruct"
-    description: "Meta's Llama 3.2 3B instruction-tuned model"
+    description: "Meta's Llama 3.2 3B instruction-tuned model (RTX 5060 Ti optimized)"
     device: "cuda"
     torch_dtype: "float16"
     generation_config:
-      max_new_tokens: 512
+      max_new_tokens: 1024  # Increased for 16GB VRAM
       temperature: 0.7
       top_p: 0.9
       top_k: 50
@@ -20,20 +21,24 @@ models:
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
     settings:
-      max_conversation_history: 10
+      max_conversation_history: 15  # Increased for better context with 16GB VRAM
       save_conversations: true
       conversation_dir: "conversations"
       use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
       log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 14  # Reserve 2GB for system
+      gradient_checkpointing: false  # Not needed for inference
 
   llama-3.2-1b-instruct:
     model_id: "meta-llama/Llama-3.2-1B-Instruct"
     display_name: "Llama 3.2 1B Instruct"
-    description: "Meta's Llama 3.2 1B instruction-tuned model (lighter version)"
+    description: "Meta's Llama 3.2 1B instruction-tuned model (fast & efficient)"
     device: "cuda"
     torch_dtype: "float16"
     generation_config:
-      max_new_tokens: 512
+      max_new_tokens: 2048  # Much higher for small model with 16GB VRAM
       temperature: 0.7
       top_p: 0.9
       top_k: 50
@@ -44,20 +49,24 @@ models:
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
     settings:
-      max_conversation_history: 15  # Lighter model can handle more history
+      max_conversation_history: 25  # Much more history for small model
       save_conversations: true
       conversation_dir: "conversations"
       use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
       log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 4  # Small model uses less memory
+      gradient_checkpointing: false
 
   llama-3.2-1b-instruct-swtbot:
-    model_id: "C:\\Users\\pc\\Desktop\\llm\\custom-code-finetune\\minimal_model"
+    model_id: "/home/cong/models/custom-code-finetune/minimal_model"  # Updated for Linux path
     display_name: "Llama 3.2 1B Instruct-swtbot (LoRA Fine-tuned)"
     description: "Meta's Llama 3.2 1B instruction-tuned model with custom LoRA adapter"
     device: "cuda"
     torch_dtype: "float16"
     generation_config:
-      max_new_tokens: 512
+      max_new_tokens: 2048  # Increased for 16GB VRAM
       temperature: 0.7
       top_p: 0.9
       top_k: 50
@@ -68,22 +77,26 @@ models:
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
     settings:
-      max_conversation_history: 15  # Lighter model can handle more history
+      max_conversation_history: 25  # More history for small model
       save_conversations: true
       conversation_dir: "conversations"
       use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
       log_level: "INFO"
-      # LoRA adapter path for fine-tuned model
-      # lora_adapter_path: "C:\\Users\\pc\\Desktop\\llm\\custom-code-finetune\\minimal_model"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 4  # Small model uses less memory
+      gradient_checkpointing: false
+      # LoRA adapter path for fine-tuned model (update path as needed)
+      # lora_adapter_path: "/home/cong/models/custom-code-finetune/minimal_model"
 
   mistral-7b-instruct:
     model_id: "mistralai/Mistral-7B-Instruct-v0.3"
     display_name: "Mistral 7B Instruct"
-    description: "Mistral's 7B instruction-tuned model"
+    description: "Mistral's 7B instruction-tuned model (RTX 5060 Ti optimized)"
     device: "cuda"
     torch_dtype: "float16"
     generation_config:
-      max_new_tokens: 512
+      max_new_tokens: 1024  # Increased for 16GB VRAM
       temperature: 0.7
       top_p: 0.9
       top_k: 50
@@ -93,11 +106,43 @@ models:
       You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
       Be friendly and professional in your interactions.
     settings:
-      max_conversation_history: 8  # Larger model, slightly less history
+      max_conversation_history: 12  # More history with 16GB VRAM
       save_conversations: true
       conversation_dir: "conversations"
       use_hf_cache: true  # Use Hugging Face default cache (~/.cache/huggingface)
       log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 12  # Reserve 4GB for system and other processes
+      gradient_checkpointing: false
+
+  # Additional model optimized for RTX 5060 Ti 16GB VRAM
+  llama-3.1-8b-instruct:
+    model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    display_name: "Llama 3.1 8B Instruct"
+    description: "Meta's Llama 3.1 8B model - takes full advantage of 16GB VRAM"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+    system_prompt: |
+      You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
+      Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 10  # Balanced for 8B model
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 15  # Use almost all 16GB VRAM
+      gradient_checkpointing: false
 
 # Default model to use when starting the chatbot
 default_model: "llama-3.2-3b-instruct"

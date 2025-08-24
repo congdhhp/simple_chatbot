@@ -1,37 +1,54 @@
 # Simple CLI Chatbot 🤖
 
-A flexible command-line chatbot powered by Hugging Face Transformers with CUDA support. Easily switch between different LLM models and manage conversations with a rich CLI interface.
+A flexible command-line chatbot powered by Hugging Face Transformers with CUDA support. Optimized for Ubuntu 24.04 WSL2 + RTX 5060 Ti 16GB + CUDA 12.0.
 
 ## Features
 
 - 🚀 **Multiple Model Support**: Easy switching between different LLM models
-- ⚡ **CUDA Acceleration**: Optimized for GPU inference with CUDA 11.8
+- ⚡ **CUDA 12.0 Acceleration**: Optimized for RTX 5060 Ti with 16GB VRAM
+- 🔥 **Flash Attention**: Memory-efficient attention computation for better performance
 - 🔧 **Flexible Configuration**: YAML-based configuration for easy model management
 - 💬 **Conversation Management**: Save, load, and manage conversation history
 - 🎨 **Rich CLI Interface**: Beautiful command-line interface with syntax highlighting
 - 📦 **Virtual Environment**: Isolated Python environment for clean dependency management
-- 🔄 **Memory Optimization**: Automatic memory management and quantization support
+- 🔄 **Memory Optimization**: Automatic memory management optimized for 16GB VRAM
+- 🐧 **WSL2 Optimized**: Specifically configured for Ubuntu 24.04 in WSL2
 
-## Quick Start
+## Quick Start for Ubuntu 24.04 WSL2 + RTX 5060 Ti
 
-### 1. Setup Virtual Environment
+### Prerequisites
+
+Ensure you have:
+- Ubuntu 24.04 in WSL2
+- NVIDIA drivers installed on Windows host
+- CUDA 12.0 toolkit: `nvcc --version` should show release 12.0
+- Python 3.12.3 (recommended): `python3 --version`
+
+### 1. Automated Setup (Recommended)
+
+```bash
+# Run the automated setup script
+python3 setup.py
+```
+
+This will:
+- Create virtual environment
+- Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.0)
+- Install flash-attention and other optimizations
+- Configure environment for RTX 5060 Ti
+
+### 2. Manual Setup (Alternative)
 
 ```bash
 # Create and activate virtual environment
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
+python3 -m venv venv
 source venv/bin/activate
-```
 
-### 2. Install Dependencies
+# Install PyTorch with CUDA 12.1 support
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-```bash
-# Install PyTorch with CUDA support
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Install flash-attention (may take several minutes)
+pip install flash-attn --no-build-isolation
 
 # Install other dependencies
 pip install -r requirements.txt
@@ -40,25 +57,35 @@ pip install -r requirements.txt
 ### 3. Run the Chatbot
 
 ```bash
-# Start with default model (Llama 3.2 3B)
-python chatbot.py
+# Use the optimized launcher script
+./run_chatbot.sh
+
+# Or manually activate and run
+source venv/bin/activate
+python3 chatbot.py
 
 # Start with specific model
-python chatbot.py -m llama-3.2-1b-instruct
+python3 chatbot.py -m llama-3.2-1b-instruct
 
 # Use custom configuration
-python chatbot.py -c config/custom.yaml
+python3 chatbot.py -c config/custom.yaml
 ```
 
-## Supported Models
+## Supported Models (RTX 5060 Ti Optimized)
 
-The chatbot comes pre-configured with several models:
+The chatbot comes pre-configured with several models optimized for 16GB VRAM:
 
-| Model | Size | Description |
-|-------|------|-------------|
-| `llama-3.2-3b-instruct` | 3B | Meta's Llama 3.2 3B (default) |
-| `llama-3.2-1b-instruct` | 1B | Lighter version for lower memory |
-| `mistral-7b-instruct` | 7B | Mistral's instruction-tuned model |
+| Model | Size | VRAM Usage | Max Tokens | Description |
+|-------|------|------------|------------|-------------|
+| `llama-3.2-1b-instruct` | 1B | ~4GB | 2048 | Fastest, most efficient |
+| `llama-3.2-3b-instruct` | 3B | ~8GB | 1024 | Balanced performance (default) |
+| `mistral-7b-instruct` | 7B | ~12GB | 1024 | High quality responses |
+| `llama-3.1-8b-instruct` | 8B | ~15GB | 1024 | Maximum quality, uses full VRAM |
+
+All models include:
+- ⚡ Flash Attention support for memory efficiency
+- 🔥 Optimized generation parameters for RTX 5060 Ti
+- 📈 Increased context length taking advantage of 16GB VRAM
 
 ## CLI Commands
 
@@ -116,15 +143,20 @@ Each model can have its own customized settings:
 - **use_hf_cache**: Whether to use shared HuggingFace cache or local cache
 - **log_level**: Logging level for this model
 
-## Memory Requirements
+## Memory Requirements (RTX 5060 Ti 16GB)
 
-| Model Size | Minimum GPU Memory | Recommended |
-|------------|-------------------|-------------|
-| 1B | 2GB | 4GB |
-| 3B | 4GB | 6GB |
-| 7B | 8GB | 12GB |
+| Model Size | VRAM Usage | Context Length | Performance |
+|------------|------------|----------------|-------------|
+| 1B | ~4GB | 25 messages | ⚡⚡⚡ Fastest |
+| 3B | ~8GB | 15 messages | ⚡⚡ Fast |
+| 7B | ~12GB | 12 messages | ⚡ Good |
+| 8B | ~15GB | 10 messages | 🎯 Best Quality |
 
-The chatbot automatically applies 4-bit quantization for GPUs with less than 8GB memory.
+**RTX 5060 Ti Advantages:**
+- 🚀 No quantization needed - full FP16 precision
+- 📈 Larger context windows for better conversations
+- ⚡ Flash attention for memory-efficient processing
+- 🔥 Optimal performance with CUDA 12.0
 
 ## Model Caching
 
@@ -232,39 +264,104 @@ models:
       log_level: "INFO"
 ```
 
+## WSL2 Setup Guide
+
+### 1. Install WSL2 with Ubuntu 24.04
+```bash
+# On Windows PowerShell (as Administrator)
+wsl --install -d Ubuntu-24.04
+```
+
+### 2. Install NVIDIA Drivers
+- Install latest NVIDIA drivers on Windows host
+- WSL2 will automatically access GPU through Windows drivers
+- No need to install drivers inside WSL2
+
+### 3. Install CUDA Toolkit in WSL2
+```bash
+# Update package list
+sudo apt update
+
+# Install CUDA 12.0
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.0-1_all.deb
+sudo dpkg -i cuda-keyring_1.0-1_all.deb
+sudo apt-get update
+sudo apt-get -y install cuda-toolkit-12-0
+
+# Add to PATH
+echo 'export PATH=/usr/local/cuda-12.0/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.0/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ## Troubleshooting
 
-### CUDA Issues
+### WSL2 + CUDA Issues
 
-If you encounter CUDA-related errors:
+If CUDA is not detected in WSL2:
 
-1. Verify CUDA installation: `nvidia-smi`
-2. Check PyTorch CUDA support: `python -c "import torch; print(torch.cuda.is_available())"`
-3. Reinstall PyTorch with correct CUDA version
+1. **Check Windows NVIDIA drivers**: Ensure latest drivers are installed on Windows host
+2. **Verify WSL2 GPU access**: `nvidia-smi` should work in WSL2
+3. **Check CUDA toolkit**: `nvcc --version` should show 12.0
+4. **Restart WSL2**: `wsl --shutdown` then restart Ubuntu
+
+### Flash Attention Issues
+
+If flash-attention fails to install:
+
+1. **Install build dependencies**:
+   ```bash
+   sudo apt install build-essential python3-dev
+   ```
+2. **Try alternative installation**:
+   ```bash
+   pip install flash-attn --no-build-isolation --no-cache-dir
+   ```
+3. **Skip flash-attention**: Remove from requirements.txt if needed
 
 ### Memory Issues
 
-For out-of-memory errors:
+With 16GB VRAM, memory issues are rare, but if they occur:
 
-1. Use smaller models (1B instead of 3B)
-2. Enable quantization (automatic for <8GB GPU)
-3. Reduce `max_new_tokens` in model config
+1. **Check GPU memory**: `nvidia-smi` to see current usage
+2. **Restart chatbot**: Clear GPU memory
+3. **Use smaller model**: Switch to 1B or 3B model
+4. **Check system RAM**: Ensure sufficient system memory
 
 ### Model Loading Issues
 
 If models fail to load:
 
-1. Check internet connection (first download)
-2. Verify Hugging Face model ID
-3. Check available disk space
-4. Review logs in `chatbot.log`
+1. **Check internet connection**: First download requires internet
+2. **Verify disk space**: Models can be 5-15GB each
+3. **Check HuggingFace cache**: `~/.cache/huggingface/`
+4. **Clear cache if corrupted**: `huggingface-cli delete-cache`
 
-## Requirements
+## System Requirements
 
-- Python 3.9+
-- CUDA 11.8 (for GPU acceleration)
-- 4GB+ GPU memory (recommended)
-- 10GB+ free disk space (for model cache)
+### Hardware
+- RTX 5060 Ti 16GB VRAM (or similar high-VRAM GPU)
+- 16GB+ system RAM
+- 50GB+ free disk space (for model cache)
+
+### Software
+- Ubuntu 24.04 in WSL2
+- Python 3.12.3 (recommended, 3.10+ required)
+- CUDA 12.0 toolkit
+- NVIDIA drivers on Windows host (for WSL2)
+
+### Verification Commands
+```bash
+# Check Python version
+python3 --version  # Should show 3.12.3
+
+# Check CUDA
+nvcc --version     # Should show release 12.0
+nvidia-smi         # Should show RTX 5060 Ti with 16GB
+
+# Check GPU in Python
+python3 -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')"
+```
 
 ## License
 

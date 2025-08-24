@@ -1,13 +1,23 @@
-# Core dependencies for the CLI chatbot
-torch>=2.0.0
-transformers>=4.35.0
-accelerate>=0.24.0
+# Core dependencies for the CLI chatbot - Ubuntu 24.04 WSL2 + CUDA 12.0 + RTX 5060 Ti
+# PyTorch with CUDA 12.0 support (install separately via pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121)
+torch>=2.1.0
+transformers>=4.36.0
+accelerate>=0.25.0
 pyyaml>=6.0
 click>=8.0.0
 colorama>=0.4.6
 rich>=13.0.0
-huggingface-hub>=0.17.0
+huggingface-hub>=0.19.0
 peft>=0.7.0  # For LoRA adapter support
 
-# Optional: for better performance
-bitsandbytes>=0.41.0
+# Flash Attention for optimized attention computation on RTX 5060 Ti
+flash-attn>=2.3.0
+
+# Performance optimizations for GPU
+bitsandbytes>=0.41.0  # GPU-accelerated quantization
+xformers>=0.0.22  # Memory-efficient attention
+optimum>=1.14.0  # Hardware-optimized inference
+
+# Additional dependencies for better WSL2 compatibility
+psutil>=5.9.0  # System monitoring
+nvidia-ml-py>=12.535.108  # NVIDIA GPU monitoring
