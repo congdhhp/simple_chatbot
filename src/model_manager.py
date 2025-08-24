@@ -141,17 +141,31 @@ class ModelManager:
 
             self.logger.info(f"Loading model: {model_config['display_name']} ({base_model_id})")
             
-            # Setup quantization if needed (for memory efficiency)
+            # Setup quantization based on model settings or memory constraints
             quantization_config = None
-            if self.device == "cuda" and torch.cuda.get_device_properties(0).total_memory < 8e9:
-                # Use 4-bit quantization for GPUs with less than 8GB memory
-                quantization_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4"
-                )
-                self.logger.info("Using 4-bit quantization for memory efficiency")
+            use_4bit_from_config = model_settings.get('use_4bit_quantization', False)
+            
+            if self.device == "cuda":
+                # Check if 4-bit quantization is explicitly enabled in config
+                if use_4bit_from_config:
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_quant_type="nf4"
+                    )
+                    self.logger.info("Using 4-bit quantization (enabled in model config)")
+                # Fallback: Auto-enable 4-bit quantization for GPUs with less than 8GB memory
+                elif torch.cuda.get_device_properties(0).total_memory < 8e9:
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_quant_type="nf4"
+                    )
+                    self.logger.info("Using 4-bit quantization for memory efficiency (auto-enabled for <8GB GPU)")
+                else:
+                    self.logger.info("Using full precision (FP16) - sufficient GPU memory available")
             
             # Load tokenizer (always from base model)
             self.logger.info("Loading tokenizer...")
@@ -169,8 +183,21 @@ class ModelManager:
             self.logger.info("Loading base model...")
             model_kwargs = {
                 'trust_remote_code': True,
-                'device_map': 'auto' if self.device == "cuda" else None,
             }
+
+            # Configure device mapping based on quantization and memory settings
+            if self.device == "cuda":
+                if quantization_config is not None:
+                    # For quantized models, use device_map="auto" with memory limits
+                    max_memory_gb = model_settings.get('max_memory_gb', 14)
+                    max_memory = f"{max_memory_gb}GB"
+                    model_kwargs['device_map'] = "auto"
+                    model_kwargs['max_memory'] = {0: max_memory}
+                    self.logger.info(f"Using device_map='auto' with max_memory={max_memory}")
+                else:
+                    # For full precision models, use device_map="auto" without memory limits
+                    model_kwargs['device_map'] = "auto"
+                    self.logger.info("Using device_map='auto' for full precision model")
 
             # Add cache_dir only if not using HF default cache
             if not self.use_hf_cache and self.cache_dir:
@@ -196,9 +223,14 @@ class ModelManager:
                 model = PeftModel.from_pretrained(model, lora_adapter_path)
                 self.logger.info("LoRA adapter loaded successfully")
 
-            # Move to device if not using device_map
-            if self.device == "cuda" and 'device_map' not in model_kwargs:
+            # Move to device only if not using device_map and not quantized
+            if self.device == "cuda" and 'device_map' not in model_kwargs and quantization_config is None:
                 model = model.to(self.device)
+                self.logger.info(f"Model moved to {self.device}")
+            elif quantization_config is not None:
+                self.logger.info("Model using quantization - device placement handled automatically")
+            else:
+                self.logger.info("Model device placement handled by device_map='auto'")
             
             # Setup generation config
             gen_config = model_config.get('generation_config', {})

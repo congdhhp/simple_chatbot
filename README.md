@@ -75,17 +75,33 @@ python3 chatbot.py -c config/custom.yaml
 
 The chatbot comes pre-configured with several models optimized for 16GB VRAM:
 
-| Model | Size | VRAM Usage | Max Tokens | Description |
-|-------|------|------------|------------|-------------|
-| `llama-3.2-1b-instruct` | 1B | ~4GB | 2048 | Fastest, most efficient |
-| `llama-3.2-3b-instruct` | 3B | ~8GB | 1024 | Balanced performance (default) |
-| `mistral-7b-instruct` | 7B | ~12GB | 1024 | High quality responses |
-| `llama-3.1-8b-instruct` | 8B | ~15GB | 1024 | Maximum quality, uses full VRAM |
+| Model | Size | VRAM Usage | Max Tokens | Quantization | Description |
+|-------|------|------------|------------|--------------|-------------|
+| `llama-3.2-1b-instruct` | 1B | ~4GB | 2048 | FP16 | Fastest, most efficient |
+| `llama-3.2-3b-instruct` | 3B | ~8GB | 1024 | FP16 | Balanced performance (default) |
+| `mistral-7b-instruct` | 7B | ~12GB | 1024 | FP16 | High quality responses |
+| `llama-3.1-8b-instruct` | 8B | ~15GB | 1024 | FP16 | Maximum quality, uses full VRAM |
+| `llama-3.1-8b-instruct-4bit` | 8B | ~8GB | 1024 | 4-bit | Large model, efficient memory |
+| `codellama-13b-instruct-4bit` | 13B | ~10GB | 1024 | 4-bit | Largest model, code-specialized |
 
 All models include:
 - ⚡ Flash Attention support for memory efficiency
 - 🔥 Optimized generation parameters for RTX 5060 Ti
 - 📈 Increased context length taking advantage of 16GB VRAM
+- 🗜️ **4-bit Quantization**: Available for large models (8B+ parameters)
+
+### 4-bit Quantization Support
+
+The chatbot now supports 4-bit quantization using BitsAndBytesConfig for efficient memory usage:
+
+- **Benefits**: Run 13B models on 16GB GPU (normally requires 24GB+)
+- **Memory Savings**: ~50-60% reduction in VRAM usage
+- **Quality**: Minimal degradation for most tasks
+- **Performance**: Slight loading overhead, fast inference
+
+**Quantized Models Available:**
+- `llama-3.1-8b-instruct-4bit`: 8B model in ~8GB VRAM (vs 15GB)
+- `codellama-13b-instruct-4bit`: 13B model in ~10GB VRAM (vs 26GB)
 
 ## CLI Commands
 
@@ -143,14 +159,35 @@ Each model can have its own customized settings:
 - **use_hf_cache**: Whether to use shared HuggingFace cache or local cache
 - **log_level**: Logging level for this model
 
+## Testing Quantization
+
+To test 4-bit quantization support and verify your setup:
+
+```bash
+# Test all model quantization settings
+python test_quantization.py
+
+# Test specific quantized model
+python test_quantization.py codellama-13b-instruct-4bit
+python test_quantization.py llama-3.1-8b-instruct-4bit
+```
+
+The test script will:
+- Show quantization status for all models
+- Load and test the specified model
+- Verify memory usage and generation quality
+- Display device placement and configuration
+
 ## Memory Requirements (RTX 5060 Ti 16GB)
 
-| Model Size | VRAM Usage | Context Length | Performance |
-|------------|------------|----------------|-------------|
-| 1B | ~4GB | 25 messages | ⚡⚡⚡ Fastest |
-| 3B | ~8GB | 15 messages | ⚡⚡ Fast |
-| 7B | ~12GB | 12 messages | ⚡ Good |
-| 8B | ~15GB | 10 messages | 🎯 Best Quality |
+| Model Size | Precision | VRAM Usage | Context Length | Performance |
+|------------|-----------|------------|----------------|-------------|
+| 1B | FP16 | ~4GB | 25 messages | ⚡⚡⚡ Fastest |
+| 3B | FP16 | ~8GB | 15 messages | ⚡⚡ Fast |
+| 7B | FP16 | ~12GB | 12 messages | ⚡ Good |
+| 8B | FP16 | ~15GB | 10 messages | 🎯 Best Quality |
+| 8B | 4-bit | ~8GB | 12 messages | 🗜️ Memory Efficient |
+| 13B | 4-bit | ~10GB | 8 messages | 🚀 Largest Model |
 
 **RTX 5060 Ti Advantages:**
 - 🚀 No quantization needed - full FP16 precision

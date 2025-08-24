@@ -115,6 +115,8 @@ models:
       use_flash_attention: true
       max_memory_gb: 12  # Reserve 4GB for system and other processes
       gradient_checkpointing: false
+      # Optional: Enable 4-bit quantization for lower memory usage
+      # use_4bit_quantization: true  # Uncomment to enable 4-bit quantization
 
   # Additional model optimized for RTX 5060 Ti 16GB VRAM
   llama-3.1-8b-instruct:
@@ -142,6 +144,120 @@ models:
       # GPU optimizations for RTX 5060 Ti
       use_flash_attention: true
       max_memory_gb: 15  # Use almost all 16GB VRAM
+      gradient_checkpointing: false
+      # Optional: Enable 4-bit quantization for even lower memory usage
+      # use_4bit_quantization: true  # Uncomment to enable 4-bit quantization
+
+  llama-3.1-8b-instruct-4bit:
+    model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    display_name: "Llama 3.1 8B Instruct (4-bit)"
+    description: "Meta's Llama 3.1 8B model with 4-bit quantization for efficient memory usage"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+    system_prompt: |
+      You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
+      Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 12  # More history with quantization
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 14  # Conservative with quantization
+      gradient_checkpointing: false
+      # Force 4-bit quantization for memory efficiency
+      use_4bit_quantization: true
+  
+  codellama-7b-instruct:
+    model_id: "codellama/CodeLlama-7b-Instruct-hf"
+    display_name: "CodeLlama 7B Instruct"
+    description: "Meta's CodeLlama 7B for code generation and explanation"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.1  # Lower for code generation
+      top_p: 0.95
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+      pad_token_id: 0  # CodeLlama specific
+    system_prompt: |
+      You are a helpful coding assistant. Provide accurate, well-documented code solutions.
+      Explain your code clearly and follow best practices.
+    settings:
+      max_conversation_history: 10
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      use_flash_attention: true
+      max_memory_gb: 13
+      gradient_checkpointing: false
+
+  codellama-13b-instruct-4bit:
+    model_id: "codellama/CodeLlama-13b-Instruct-hf"
+    display_name: "CodeLlama 13B Instruct (4-bit)"
+    description: "Meta's CodeLlama 13B with 4-bit quantization for 16GB VRAM"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.1
+      top_p: 0.95
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+      pad_token_id: 0
+    system_prompt: |
+      You are an expert coding assistant specialized in software development.
+      Provide comprehensive, production-ready code solutions with detailed explanations.
+    settings:
+      max_conversation_history: 8
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      use_flash_attention: true
+      max_memory_gb: 15
+      gradient_checkpointing: false
+      # Force quantization for 13B model
+      use_4bit_quantization: true
+
+  codellama-7b-python:
+    model_id: "codellama/CodeLlama-7b-Python-hf"
+    display_name: "CodeLlama 7B Python"
+    description: "CodeLlama specialized for Python code generation"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 2048  # Longer for code generation
+      temperature: 0.05  # Very low for precise code
+      top_p: 0.9
+      top_k: 40
+      do_sample: true
+      repetition_penalty: 1.05
+      pad_token_id: 0
+    system_prompt: |
+      You are a Python expert. Generate clean, efficient, and well-documented Python code.
+      Follow PEP 8 standards and include appropriate error handling.
+    settings:
+      max_conversation_history: 12
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      use_flash_attention: true
+      max_memory_gb: 13
       gradient_checkpointing: false
 
 # Default model to use when starting the chatbot
