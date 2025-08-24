@@ -81,26 +81,30 @@ The chatbot comes pre-configured with several models optimized for 16GB VRAM:
 | `llama-3.2-3b-instruct` | 3B | ~8GB | 1024 | FP16 | Balanced performance (default) |
 | `mistral-7b-instruct` | 7B | ~12GB | 1024 | FP16 | High quality responses |
 | `llama-3.1-8b-instruct` | 8B | ~15GB | 1024 | FP16 | Maximum quality, uses full VRAM |
+| `llama-3.1-8b-instruct-8bit` | 8B | ~10GB | 1024 | 8-bit | Balanced performance and memory |
 | `llama-3.1-8b-instruct-4bit` | 8B | ~8GB | 1024 | 4-bit | Large model, efficient memory |
-| `codellama-13b-instruct-4bit` | 13B | ~10GB | 1024 | 4-bit | Largest model, code-specialized |
+| `codellama-13b-instruct-8bit` | 13B | ~14GB | 1024 | 8-bit | Largest model, better quality |
+| `codellama-13b-instruct-4bit` | 13B | ~10GB | 1024 | 4-bit | Largest model, maximum efficiency |
 
 All models include:
 - ⚡ Flash Attention support for memory efficiency
 - 🔥 Optimized generation parameters for RTX 5060 Ti
 - 📈 Increased context length taking advantage of 16GB VRAM
-- 🗜️ **4-bit Quantization**: Available for large models (8B+ parameters)
+- 🗜️ **Quantization Support**: Available for large models (7B+ parameters)
 
-### 4-bit Quantization Support
+### Quantization Support
 
-The chatbot now supports 4-bit quantization using BitsAndBytesConfig for efficient memory usage:
+The chatbot now supports both 4-bit and 8-bit quantization using BitsAndBytesConfig for efficient memory usage:
 
 - **Benefits**: Run 13B models on 16GB GPU (normally requires 24GB+)
-- **Memory Savings**: ~50-60% reduction in VRAM usage
-- **Quality**: Minimal degradation for most tasks
-- **Performance**: Slight loading overhead, fast inference
+- **4-bit Quantization**: ~60-70% memory reduction, maximum efficiency
+- **8-bit Quantization**: ~40-50% memory reduction, better quality than 4-bit
+- **Performance**: Minimal inference impact, slight loading overhead
 
 **Quantized Models Available:**
+- `llama-3.1-8b-instruct-8bit`: 8B model in ~10GB VRAM (vs 15GB)  
 - `llama-3.1-8b-instruct-4bit`: 8B model in ~8GB VRAM (vs 15GB)
+- `codellama-13b-instruct-8bit`: 13B model in ~14GB VRAM (vs 26GB)
 - `codellama-13b-instruct-4bit`: 13B model in ~10GB VRAM (vs 26GB)
 
 ## CLI Commands
@@ -161,19 +165,21 @@ Each model can have its own customized settings:
 
 ## Testing Quantization
 
-To test 4-bit quantization support and verify your setup:
+To test quantization support and verify your setup:
 
 ```bash
 # Test all model quantization settings
 python test_quantization.py
 
-# Test specific quantized model
+# Test specific quantized models
 python test_quantization.py codellama-13b-instruct-4bit
+python test_quantization.py codellama-13b-instruct-8bit
 python test_quantization.py llama-3.1-8b-instruct-4bit
+python test_quantization.py llama-3.1-8b-instruct-8bit
 ```
 
 The test script will:
-- Show quantization status for all models
+- Show quantization status for all models (🔵 FP16, 🟡 8-bit, 🟢 4-bit)
 - Load and test the specified model
 - Verify memory usage and generation quality
 - Display device placement and configuration
@@ -186,8 +192,10 @@ The test script will:
 | 3B | FP16 | ~8GB | 15 messages | ⚡⚡ Fast |
 | 7B | FP16 | ~12GB | 12 messages | ⚡ Good |
 | 8B | FP16 | ~15GB | 10 messages | 🎯 Best Quality |
+| 8B | 8-bit | ~10GB | 11 messages | 🟡 Balanced |
 | 8B | 4-bit | ~8GB | 12 messages | 🗜️ Memory Efficient |
-| 13B | 4-bit | ~10GB | 8 messages | 🚀 Largest Model |
+| 13B | 8-bit | ~14GB | 7 messages | 🟡 Large Model, Good Quality |
+| 13B | 4-bit | ~10GB | 8 messages | 🚀 Largest Model, Max Efficiency |
 
 **RTX 5060 Ti Advantages:**
 - 🚀 No quantization needed - full FP16 precision

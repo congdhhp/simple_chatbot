@@ -115,8 +115,9 @@ models:
       use_flash_attention: true
       max_memory_gb: 12  # Reserve 4GB for system and other processes
       gradient_checkpointing: false
-      # Optional: Enable 4-bit quantization for lower memory usage
-      # use_4bit_quantization: true  # Uncomment to enable 4-bit quantization
+      # Optional: Enable quantization for lower memory usage
+      # use_8bit_quantization: true   # Better quality than 4-bit, moderate memory savings
+      # use_4bit_quantization: true   # Maximum memory savings, slight quality loss
 
   # Additional model optimized for RTX 5060 Ti 16GB VRAM
   llama-3.1-8b-instruct:
@@ -145,8 +146,9 @@ models:
       use_flash_attention: true
       max_memory_gb: 15  # Use almost all 16GB VRAM
       gradient_checkpointing: false
-      # Optional: Enable 4-bit quantization for even lower memory usage
-      # use_4bit_quantization: true  # Uncomment to enable 4-bit quantization
+      # Optional: Enable quantization for lower memory usage
+      # use_8bit_quantization: true   # Better quality than 4-bit, moderate memory savings
+      # use_4bit_quantization: true   # Maximum memory savings, slight quality loss
 
   llama-3.1-8b-instruct-4bit:
     model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct"
@@ -176,6 +178,35 @@ models:
       gradient_checkpointing: false
       # Force 4-bit quantization for memory efficiency
       use_4bit_quantization: true
+
+  llama-3.1-8b-instruct-8bit:
+    model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    display_name: "Llama 3.1 8B Instruct (8-bit)"
+    description: "Meta's Llama 3.1 8B model with 8-bit quantization for balanced performance"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+    system_prompt: |
+      You are a helpful AI assistant. Provide accurate, concise, and helpful responses.
+      Be friendly and professional in your interactions.
+    settings:
+      max_conversation_history: 11  # Balanced history with 8-bit
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      # GPU optimizations for RTX 5060 Ti
+      use_flash_attention: true
+      max_memory_gb: 14  # Balanced memory for 8-bit quantization
+      gradient_checkpointing: false
+      # Use 8-bit quantization for balanced performance
+      use_8bit_quantization: true
   
   codellama-7b-instruct:
     model_id: "codellama/CodeLlama-7b-Instruct-hf"
@@ -230,8 +261,37 @@ models:
       use_flash_attention: true
       max_memory_gb: 15
       gradient_checkpointing: false
-      # Force quantization for 13B model
+      # Force 4-bit quantization for 13B model
       use_4bit_quantization: true
+
+  codellama-13b-instruct-8bit:
+    model_id: "codellama/CodeLlama-13b-Instruct-hf"
+    display_name: "CodeLlama 13B Instruct (8-bit)"
+    description: "Meta's CodeLlama 13B with 8-bit quantization for better quality vs 4-bit"
+    device: "cuda"
+    torch_dtype: "float16"
+    generation_config:
+      max_new_tokens: 1024
+      temperature: 0.1
+      top_p: 0.95
+      top_k: 50
+      do_sample: true
+      repetition_penalty: 1.1
+      pad_token_id: 0
+    system_prompt: |
+      You are an expert coding assistant specialized in software development.
+      Provide comprehensive, production-ready code solutions with detailed explanations.
+    settings:
+      max_conversation_history: 7  # Slightly less due to higher memory usage
+      save_conversations: true
+      conversation_dir: "conversations"
+      use_hf_cache: true
+      log_level: "INFO"
+      use_flash_attention: true
+      max_memory_gb: 15  # Higher memory for 8-bit (better than 4-bit quality)
+      gradient_checkpointing: false
+      # Use 8-bit quantization for better quality than 4-bit
+      use_8bit_quantization: true
 
   codellama-7b-python:
     model_id: "codellama/CodeLlama-7b-Python-hf"

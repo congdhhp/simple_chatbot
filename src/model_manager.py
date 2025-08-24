@@ -144,9 +144,10 @@ class ModelManager:
             # Setup quantization based on model settings or memory constraints
             quantization_config = None
             use_4bit_from_config = model_settings.get('use_4bit_quantization', False)
+            use_8bit_from_config = model_settings.get('use_8bit_quantization', False)
             
             if self.device == "cuda":
-                # Check if 4-bit quantization is explicitly enabled in config
+                # Check quantization settings from config (4-bit takes precedence over 8-bit)
                 if use_4bit_from_config:
                     quantization_config = BitsAndBytesConfig(
                         load_in_4bit=True,
@@ -155,7 +156,14 @@ class ModelManager:
                         bnb_4bit_quant_type="nf4"
                     )
                     self.logger.info("Using 4-bit quantization (enabled in model config)")
-                # Fallback: Auto-enable 4-bit quantization for GPUs with less than 8GB memory
+                elif use_8bit_from_config:
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_8bit=True,
+                        llm_int8_enable_fp32_cpu_offload=True,  # Enable CPU offload for stability
+                        llm_int8_threshold=6.0  # Default threshold for outlier detection
+                    )
+                    self.logger.info("Using 8-bit quantization (enabled in model config)")
+                # Fallback: Auto-enable quantization for GPUs with limited memory
                 elif torch.cuda.get_device_properties(0).total_memory < 8e9:
                     quantization_config = BitsAndBytesConfig(
                         load_in_4bit=True,
@@ -192,8 +200,15 @@ class ModelManager:
                     max_memory_gb = model_settings.get('max_memory_gb', 14)
                     max_memory = f"{max_memory_gb}GB"
                     model_kwargs['device_map'] = "auto"
-                    model_kwargs['max_memory'] = {0: max_memory}
-                    self.logger.info(f"Using device_map='auto' with max_memory={max_memory}")
+                    
+                    # For 8-bit quantization, allow some CPU offloading
+                    if use_8bit_from_config:
+                        # Don't set strict memory limits for 8-bit, allow auto balancing
+                        self.logger.info("Using device_map='auto' for 8-bit quantization with CPU offload support")
+                    else:
+                        # For 4-bit, set memory limits
+                        model_kwargs['max_memory'] = {0: max_memory}
+                        self.logger.info(f"Using device_map='auto' with max_memory={max_memory}")
                 else:
                     # For full precision models, use device_map="auto" without memory limits
                     model_kwargs['device_map'] = "auto"
