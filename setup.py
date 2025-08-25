@@ -106,16 +106,27 @@ def install_dependencies():
     if not run_command(pytorch_cmd, "Installing PyTorch with CUDA 12.1 support"):
         return False
 
-    # Install flash-attention (requires compilation, may take time)
-    print("⚡ Installing flash-attention (this may take several minutes)...")
-    flash_attn_cmd = f"{activate_cmd} && pip install flash-attn --no-build-isolation"
-    if not run_command(flash_attn_cmd, "Installing flash-attention"):
-        print("⚠️  Flash-attention installation failed, continuing without it")
-        print("💡 You can install it later with: pip install flash-attn --no-build-isolation")
-
-    # Install other dependencies
+    # Install other dependencies first
     deps_cmd = f"{activate_cmd} && pip install -r requirements.txt"
-    return run_command(deps_cmd, "Installing other dependencies")
+    if not run_command(deps_cmd, "Installing other dependencies"):
+        return False
+
+    # Install flash-attention from local wheel file (after PyTorch and other deps)
+    print("⚡ Installing flash-attention from local wheel file...")
+    flash_attn_wheel = "flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl"
+    
+    # Check if wheel file exists
+    if Path(flash_attn_wheel).exists():
+        flash_attn_cmd = f"{activate_cmd} && pip install {flash_attn_wheel}"
+        if not run_command(flash_attn_cmd, "Installing flash-attention from wheel"):
+            print("⚠️  Flash-attention installation from wheel failed, continuing without it")
+            print(f"💡 You can install it later with: pip install {flash_attn_wheel}")
+    else:
+        print(f"⚠️  Flash-attention wheel file not found: {flash_attn_wheel}")
+        print("💡 Download the wheel file from: https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/")
+        print("💡 Or install from source with: pip install flash-attn --no-build-isolation")
+    
+    return True
 
 
 def create_directories():
