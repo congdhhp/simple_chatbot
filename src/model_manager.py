@@ -15,6 +15,15 @@ try:
     PEFT_AVAILABLE = True
 except ImportError:
     PEFT_AVAILABLE = False
+
+# Flash Attention support
+try:
+    import flash_attn
+    from flash_attn import flash_attn_func
+    FLASH_ATTN_AVAILABLE = True
+except ImportError:
+    FLASH_ATTN_AVAILABLE = False
+
 from config_manager import ConfigManager
 
 
@@ -47,6 +56,14 @@ class ModelManager:
             self.logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
         else:
             self.logger.warning("CUDA not available. Using CPU.")
+        
+        # Check Flash Attention availability
+        if FLASH_ATTN_AVAILABLE:
+            self.logger.info(f"Flash Attention available. Version: {flash_attn.__version__}")
+        else:
+            self.logger.warning("Flash Attention not available. Install with: pip install flash-attn")
+        
+        self.flash_attn_enabled = False
 
     def _is_lora_adapter(self, path: str) -> bool:
         """Check if a path contains a LoRA adapter.
@@ -66,6 +83,44 @@ class ModelManager:
 
         return adapter_config.exists() and adapter_model.exists()
     
+    def _configure_flash_attention(self, model_settings: Dict[str, Any]) -> bool:
+        """Configure Flash Attention based on model settings.
+        
+        Args:
+            model_settings: Model settings dictionary
+            
+        Returns:
+            True if Flash Attention is enabled and configured
+        """
+        use_flash_attention = model_settings.get('use_flash_attention', False)
+        
+        if not use_flash_attention:
+            self.flash_attn_enabled = False
+            self.logger.info("Flash Attention disabled in model config")
+            return False
+        
+        if not FLASH_ATTN_AVAILABLE:
+            self.flash_attn_enabled = False
+            self.logger.warning("Flash Attention requested but not available. Install with: pip install flash-attn")
+            return False
+        
+        if self.device != "cuda":
+            self.flash_attn_enabled = False
+            self.logger.warning("Flash Attention requires CUDA but using CPU")
+            return False
+        
+        # Check GPU compatibility (Flash Attention requires SM >= 8.0 for optimal performance)
+        gpu_major = torch.cuda.get_device_properties(0).major
+        gpu_minor = torch.cuda.get_device_properties(0).minor
+        gpu_compute = gpu_major * 10 + gpu_minor
+        
+        if gpu_compute < 80:
+            self.logger.warning(f"GPU compute capability {gpu_major}.{gpu_minor} may not be optimal for Flash Attention (recommended: >= 8.0)")
+        
+        self.flash_attn_enabled = True
+        self.logger.info("Flash Attention enabled and configured")
+        return True
+    
     def load_model(self, model_name: Optional[str] = None) -> bool:
         """Load a model and tokenizer.
         
@@ -83,6 +138,9 @@ class ModelManager:
             model_config = self.config_manager.get_model_config(model_name)
             model_settings = self.config_manager.get_settings(model_name)
             model_id = model_config['model_id']
+
+            # Configure Flash Attention
+            self._configure_flash_attention(model_settings)
 
             # Check if this is a LoRA adapter
             is_lora = self._is_lora_adapter(model_id)
@@ -230,6 +288,16 @@ class ModelManager:
             if quantization_config is not None:
                 model_kwargs['quantization_config'] = quantization_config
 
+            # Configure Flash Attention
+            if self.flash_attn_enabled:
+                # Enable Flash Attention by setting attn_implementation
+                model_kwargs['attn_implementation'] = "flash_attention_2"
+                self.logger.info("Using Flash Attention 2 implementation")
+            else:
+                # Use default attention implementation
+                model_kwargs['attn_implementation'] = "eager"
+                self.logger.info("Using default (eager) attention implementation")
+
             model = AutoModelForCausalLM.from_pretrained(base_model_id, **model_kwargs)
 
             # Load LoRA adapter if specified
@@ -336,12 +404,17 @@ class ModelManager:
             return {"status": "No model loaded"}
         
         model_config = self.config_manager.get_model_config(self.current_model_name)
+        model_settings = self.config_manager.get_settings(self.current_model_name)
+        
         return {
             "name": self.current_model_name,
             "display_name": model_config['display_name'],
             "model_id": model_config['model_id'],
             "description": model_config.get('description', ''),
             "device": str(self.current_model.device) if self.current_model else "Unknown",
+            "flash_attention": "Enabled" if self.flash_attn_enabled else "Disabled",
+            "flash_attention_available": FLASH_ATTN_AVAILABLE,
+            "use_flash_attention_config": model_settings.get('use_flash_attention', False),
             "status": "Loaded"
         }
     

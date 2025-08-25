@@ -102,6 +102,21 @@ class ChatbotCLI:
         info_text.append(f"Model: {info['display_name']}\n", style="bold green")
         info_text.append(f"ID: {info['model_id']}\n", style="dim")
         info_text.append(f"Device: {info['device']}\n", style="cyan")
+        
+        # Flash Attention status
+        flash_status = info.get('flash_attention', 'Unknown')
+        flash_available = info.get('flash_attention_available', False)
+        flash_config = info.get('use_flash_attention_config', False)
+        
+        if flash_available:
+            if flash_status == "Enabled":
+                info_text.append(f"Flash Attention: ✅ {flash_status}\n", style="green")
+            else:
+                info_text.append(f"Flash Attention: ❌ {flash_status}\n", style="yellow")
+        else:
+            info_text.append(f"Flash Attention: ❌ Not Available\n", style="red")
+        
+        info_text.append(f"Flash Attention Config: {'✅' if flash_config else '❌'}\n", style="cyan")
         info_text.append(f"Description: {info.get('description', 'N/A')}\n", style="white")
         
         panel = Panel(info_text, title="Current Model Info", border_style="green")
