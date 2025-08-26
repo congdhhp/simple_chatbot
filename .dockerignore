@@ -1,0 +1,43 @@
+# Ignore development files
+.git
+.gitignore
+README.md
+*.md
+.env
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+
+# Ignore logs and temporary files
+logs/*
+*.log
+conversations/*
+*.tmp
+*.swp
+*.swo
+
+# Ignore test files and benchmarks
+test_*.py
+benchmark_*.py
+benchmark_results_*.json
+
+# Ignore build artifacts
+.pytest_cache
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Ignore wheel files (we download them during build)
+*.whl
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
