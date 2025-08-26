@@ -292,6 +292,10 @@ models:
       gradient_checkpointing: false
       # Use 8-bit quantization for better quality than 4-bit
       use_8bit_quantization: true
+      # Tokenizer settings to fix warnings
+      max_input_length: 4096  # CodeLlama context length
+      truncation: true
+      padding: true
 
   codellama-7b-python:
     model_id: "codellama/CodeLlama-7b-Python-hf"

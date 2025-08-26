@@ -209,3 +209,5 @@ __marimo__/
 # Project specific - Simple CLI Chatbot
 conversations/*.json
 !conversations/.gitkeep
+*.whl
+*.json
