@@ -11,6 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add parent directory to path
 parent_path = Path(__file__).parent.parent.parent
@@ -20,8 +24,10 @@ from src.config_manager import ConfigManager
 from src.model_manager import ModelManager
 from src.conversation_manager import ConversationManager
 from src.api.models import ErrorResponse
-from src.api.routes import chat, completions, models, health
+from src.api.routes import chat, completions, models, health, auth, monitoring
 from src.api.middleware.logging import setup_logging
+from src.api.middleware.monitoring import metrics_middleware, metrics_collector
+from src.api.middleware.rate_limit import check_rate_limits
 
 # Global instances
 config_manager = None
@@ -98,6 +104,26 @@ app.add_middleware(
     allowed_hosts=["*"]  # Configure as needed
 )
 
+# Add metrics middleware
+@app.middleware("http")
+async def add_metrics_middleware(request: Request, call_next):
+    """Add metrics collection middleware."""
+    return await metrics_middleware(request, call_next)
+
+# Add rate limiting middleware
+@app.middleware("http") 
+async def add_rate_limiting_middleware(request: Request, call_next):
+    """Add rate limiting middleware."""
+    # Skip rate limiting for health endpoints
+    if request.url.path in ["/health", "/health/live", "/health/ready"]:
+        return await call_next(request)
+    
+    # Check if rate limiting is enabled
+    if os.getenv("ENABLE_RATE_LIMITING", "true").lower() == "true":
+        await check_rate_limits(request)
+    
+    return await call_next(request)
+
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -130,6 +156,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
+app.include_router(auth.router, tags=["Authentication"])
+app.include_router(monitoring.router, prefix="/admin", tags=["Monitoring"])
 app.include_router(models.router, prefix="/v1", tags=["Models"])
 app.include_router(completions.router, prefix="/v1", tags=["Completions"])
 app.include_router(chat.router, prefix="/v1", tags=["Chat"])
@@ -141,7 +169,9 @@ async def root():
         "message": "Simple LLM Service",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "authentication": "/auth/login",
+        "monitoring": "/admin/status"
     }
 
 @click.command()

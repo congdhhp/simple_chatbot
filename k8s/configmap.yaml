@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-llm-config
+  namespace: default
+data:
+  # Application Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  LOG_LEVEL: "INFO"
+  
+  # Authentication
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  
+  # Model Configuration
+  DEFAULT_MODEL: "llama-3.2-3b-instruct"
+  ENABLE_FLASH_ATTENTION: "true"
+  
+  # CUDA Configuration
+  CUDA_VISIBLE_DEVICES: "0"
+  TOKENIZERS_PARALLELISM: "false"
+  
+  # Features
+  ENABLE_RATE_LIMITING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_AUTHENTICATION: "true"
+  REQUIRE_AUTH_FOR_COMPLETIONS: "false"
+  
+  # Performance
+  MAX_CONCURRENT_REQUESTS: "10"
+  REQUEST_TIMEOUT_SECONDS: "300"
+  MODEL_LOAD_TIMEOUT_SECONDS: "600"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: simple-llm-secrets
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded secrets
+  # echo -n "your-very-long-secret-key-for-jwt-tokens" | base64
+  jwt-secret-key: eW91ci12ZXJ5LWxvbmctc2VjcmV0LWtleS1mb3Itand0LXRva2Vucw==

@@ -2,13 +2,16 @@
 
 import logging
 import uuid
-from fastapi import APIRouter, Request, HTTPException
+import os
+from fastapi import APIRouter, Request, HTTPException, Depends
 from src.api.models import (
     CompletionRequest, 
     CompletionResponse, 
     CompletionChoice,
     Usage
 )
+from src.api.middleware.auth import optional_auth
+from src.api.middleware.monitoring import metrics_collector
 
 router = APIRouter()
 
@@ -17,7 +20,11 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 @router.post("/completions", response_model=CompletionResponse)
-async def create_completion(request_data: CompletionRequest, request: Request):
+async def create_completion(
+    request_data: CompletionRequest, 
+    request: Request,
+    current_user: dict = Depends(optional_auth)
+):
     """Create text completion - OpenAI compatible."""
     
     model_manager = getattr(request.app.state, 'model_manager', None)
@@ -68,6 +75,13 @@ async def create_completion(request_data: CompletionRequest, request: Request):
             
             if not response_text:
                 raise HTTPException(status_code=500, detail=f"Failed to generate completion for prompt {i}")
+            
+            # Record model usage for metrics
+            metrics_collector.record_model_usage(request_data.model)
+            
+            # Store user info for metrics
+            if current_user:
+                request.state.user = current_user
             
             # Estimate tokens
             prompt_tokens = estimate_tokens(prompt)

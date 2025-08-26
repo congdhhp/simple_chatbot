@@ -1,0 +1,184 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-llm-service
+  namespace: default
+  labels:
+    app: simple-llm-service
+    version: v1.0.0
+spec:
+  replicas: 1  # Start with 1 replica due to GPU constraints
+  selector:
+    matchLabels:
+      app: simple-llm-service
+  template:
+    metadata:
+      labels:
+        app: simple-llm-service
+    spec:
+      containers:
+      - name: simple-llm-service
+        image: simple-llm-service:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Load from ConfigMap
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: PORT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: LOG_LEVEL
+        - name: DEFAULT_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: DEFAULT_MODEL
+        - name: ENABLE_FLASH_ATTENTION
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: ENABLE_FLASH_ATTENTION
+        - name: CUDA_VISIBLE_DEVICES
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: CUDA_VISIBLE_DEVICES
+        - name: ENABLE_RATE_LIMITING
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: ENABLE_RATE_LIMITING
+        - name: ENABLE_AUTHENTICATION
+          valueFrom:
+            configMapKeyRef:
+              name: simple-llm-config
+              key: ENABLE_AUTHENTICATION
+        
+        # Load from Secret
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: simple-llm-secrets
+              key: jwt-secret-key
+        
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "8"
+            nvidia.com/gpu: "1"
+        
+        volumeMounts:
+        - name: model-cache
+          mountPath: /home/appuser/.cache/huggingface
+        - name: logs
+          mountPath: /app/logs
+        - name: conversations
+          mountPath: /app/conversations
+        
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12  # 2 minutes for model loading
+      
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: logs-pvc
+      - name: conversations
+        persistentVolumeClaim:
+          claimName: conversations-pvc
+      
+      # Node selection for GPU nodes
+      nodeSelector:
+        accelerator: nvidia-gpu
+      
+      # Tolerations for GPU nodes
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-llm-service
+  namespace: default
+  labels:
+    app: simple-llm-service
+spec:
+  selector:
+    app: simple-llm-service
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: simple-llm-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  rules:
+  - host: simple-llm.example.com  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: simple-llm-service
+            port:
+              number: 8000

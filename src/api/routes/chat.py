@@ -3,7 +3,8 @@
 import logging
 import uuid
 import time
-from fastapi import APIRouter, Request, HTTPException
+import os
+from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from src.api.models import (
     ChatCompletionRequest, 
@@ -12,6 +13,8 @@ from src.api.models import (
     ChatMessage,
     Usage
 )
+from src.api.middleware.auth import optional_auth, require_auth
+from src.api.middleware.monitoring import metrics_collector
 
 router = APIRouter()
 
@@ -37,7 +40,11 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 @router.post("/chat/completions", response_model=ChatCompletionResponse)
-async def create_chat_completion(request_data: ChatCompletionRequest, request: Request):
+async def create_chat_completion(
+    request_data: ChatCompletionRequest, 
+    request: Request,
+    current_user: dict = Depends(optional_auth)
+):
     """Create chat completion - OpenAI compatible."""
     
     model_manager = getattr(request.app.state, 'model_manager', None)
@@ -88,6 +95,13 @@ async def create_chat_completion(request_data: ChatCompletionRequest, request: R
         
         if not response_text:
             raise HTTPException(status_code=500, detail="Failed to generate response")
+        
+        # Record model usage for metrics
+        metrics_collector.record_model_usage(request_data.model)
+        
+        # Store user info for metrics
+        if current_user:
+            request.state.user = current_user
         
         # Estimate token usage
         prompt_tokens = estimate_tokens(prompt)

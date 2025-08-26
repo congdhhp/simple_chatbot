@@ -2,8 +2,9 @@
 
 import logging
 import time
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 from src.api.models import ModelsResponse, ModelInfo
+from src.api.middleware.auth import optional_auth, require_permission
 
 router = APIRouter()
 
@@ -60,8 +61,12 @@ async def get_model(model_id: str, request: Request):
         raise HTTPException(status_code=500, detail="Failed to get model information")
 
 @router.post("/models/{model_id}/load")
-async def load_model(model_id: str, request: Request):
-    """Load a specific model."""
+async def load_model(
+    model_id: str, 
+    request: Request,
+    current_user: dict = Depends(require_permission("write"))
+):
+    """Load a specific model (requires write permission)."""
     
     model_manager = getattr(request.app.state, 'model_manager', None)
     config_manager = getattr(request.app.state, 'config_manager', None)
