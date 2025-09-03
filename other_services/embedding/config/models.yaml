@@ -1,0 +1,195 @@
+# Model configurations for the Embedding Service
+# NVIDIA NIM compatible embedding models with support for multiple families
+# Optimized for various GPU configurations and use cases
+
+models:
+  # E5 Family Models (Default) - Require input_type specification
+  e5-large-v2:
+    model_id: "intfloat/e5-large-v2"
+    display_name: "E5 Large V2"
+    description: "Multilingual text embeddings model optimized for retrieval tasks"
+    family: "e5"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 1024
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: true
+    supports_dimensions: [256, 512, 768, 1024]
+    supported_embedding_types: ["float", "int8", "uint8"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 32
+      max_memory_gb: 4
+      use_auth_token: false
+      trust_remote_code: false
+      query_prefix: "query: "
+      passage_prefix: "passage: "
+
+  e5-base-v2:
+    model_id: "intfloat/e5-base-v2"
+    display_name: "E5 Base V2"
+    description: "Balanced E5 model for general text embedding tasks"
+    family: "e5"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 768
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: true
+    supports_dimensions: [256, 384, 512, 768]
+    supported_embedding_types: ["float", "int8", "uint8"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 64
+      max_memory_gb: 2
+      query_prefix: "query: "
+      passage_prefix: "passage: "
+
+  e5-small-v2:
+    model_id: "intfloat/e5-small-v2"
+    display_name: "E5 Small V2"
+    description: "Compact E5 model for fast inference"
+    family: "e5"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 384
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: true
+    supports_dimensions: [128, 256, 384]
+    supported_embedding_types: ["float", "int8", "uint8", "binary", "ubinary"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 128
+      max_memory_gb: 1
+      query_prefix: "query: "
+      passage_prefix: "passage: "
+
+  # GTE Family Models - No input_type required
+  gte-large:
+    model_id: "thenlper/gte-large"
+    display_name: "GTE Large"
+    description: "General Text Embeddings Large model"
+    family: "gte"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 1024
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: false
+    supports_dimensions: [256, 512, 768, 1024]
+    supported_embedding_types: ["float", "int8", "uint8"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 32
+      max_memory_gb: 4
+
+  gte-base:
+    model_id: "thenlper/gte-base"
+    display_name: "GTE Base"
+    description: "General Text Embeddings Base model"
+    family: "gte"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 768
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: false
+    supports_dimensions: [256, 384, 512, 768]
+    supported_embedding_types: ["float", "int8", "uint8"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 64
+      max_memory_gb: 2
+
+  # Sentence Transformers Generic Models
+  all-MiniLM-L6-v2:
+    model_id: "sentence-transformers/all-MiniLM-L6-v2"
+    display_name: "All MiniLM L6 V2"
+    description: "Compact sentence transformer for general embeddings"
+    family: "sentence_transformers"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 256
+    embedding_dimension: 384
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: false
+    supports_dimensions: [128, 256, 384]
+    supported_embedding_types: ["float", "int8", "uint8", "binary", "ubinary"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 128
+      max_memory_gb: 1
+
+  all-mpnet-base-v2:
+    model_id: "sentence-transformers/all-mpnet-base-v2"
+    display_name: "All MPNet Base V2"
+    description: "High-quality sentence transformer model"
+    family: "sentence_transformers"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 384
+    embedding_dimension: 768
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: false
+    supports_dimensions: [256, 384, 512, 768]
+    supported_embedding_types: ["float", "int8", "uint8"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 64
+      max_memory_gb: 2
+
+  # NV-Embed Family (NVIDIA-style models)
+  nv-embed-v1:
+    model_id: "nvidia/nv-embed-v1"  # Placeholder - would be actual NVIDIA model
+    display_name: "NV Embed V1"
+    description: "NVIDIA optimized embedding model"
+    family: "nv_embed"
+    device: "cuda"
+    torch_dtype: "float16"
+    max_seq_length: 512
+    embedding_dimension: 1024
+    pooling_mode: "mean"
+    normalize_embeddings: true
+    supports_input_type: true
+    supports_dimensions: [256, 512, 768, 1024]
+    supported_embedding_types: ["float", "int8", "uint8", "binary", "ubinary"]
+    supported_modalities: ["text"]
+    settings:
+      batch_size: 32
+      max_memory_gb: 4
+      query_prefix: "Represent this sentence for searching relevant passages: "
+      passage_prefix: "Represent this sentence for retrieval: "
+
+# Service configuration
+service:
+  default_model: "e5-large-v2"
+  max_input_length: 8192  # Maximum total characters across all inputs
+  max_batch_size: 64
+  enable_dynamic_batching: true
+  batch_timeout_ms: 100
+  
+  # GPU settings
+  gpu_memory_fraction: 0.9
+  allow_tf32: true
+  
+  # Compression settings
+  default_embedding_type: "float"
+  enable_embedding_compression: true
+  
+  # API settings
+  max_concurrent_requests: 100
+  request_timeout_seconds: 30
+  
+  # Logging
+  log_level: "INFO"
+  enable_request_logging: true
+  log_embeddings: false  # Set to true for debugging, false for production

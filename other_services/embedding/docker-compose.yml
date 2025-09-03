@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  embedding-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: embedding-service
+    ports:
+      - "8009:8009"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8009
+      - WORKERS=1
+      - LOG_LEVEL=info
+      - CONFIG_PATH=config/models.yaml
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./cache:/app/cache
+      - ./models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/v1/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Redis for caching (if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: embedding-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:
