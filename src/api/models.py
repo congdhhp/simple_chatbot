@@ -60,6 +60,9 @@ class Usage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    # Wave 1 Enhancement: Add metadata for monitoring
+    tokens_per_second: Optional[float] = None
+    latency_ms: Optional[float] = None
 
 class ChatCompletionResponse(BaseModel):
     """Chat completion response model - OpenAI compatible."""
@@ -69,6 +72,8 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: List[ChatChoice]
     usage: Optional[Usage] = None
+    # Wave 1 Enhancement: Add system fingerprint for version tracking
+    system_fingerprint: Optional[str] = None
 
 class CompletionResponse(BaseModel):
     """Text completion response model - OpenAI compatible."""
@@ -78,6 +83,8 @@ class CompletionResponse(BaseModel):
     model: str
     choices: List[CompletionChoice]
     usage: Optional[Usage] = None
+    # Wave 1 Enhancement: Add system fingerprint for version tracking  
+    system_fingerprint: Optional[str] = None
 
 class ModelInfo(BaseModel):
     """Model information response."""

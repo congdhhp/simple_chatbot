@@ -3,7 +3,8 @@
 import os
 import torch
 import logging
-from typing import Dict, Any, Optional, Tuple
+import copy
+from typing import Dict, Any, Optional, Tuple, Generator
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -331,68 +332,99 @@ class ModelManager:
             self.logger.error(f"Failed to load model {model_name}: {str(e)}")
             return False
     
-    def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Generate a response using the current model.
-        
-        Args:
-            prompt: User input prompt
-            system_prompt: Optional system prompt override
-            
-        Returns:
-            Generated response text
+    def generate_response(self, prompt: str, system_prompt: Optional[str] = None, 
+                          override_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Generate a full response (non-streaming) with precise token accounting.
+
+        Returns dict: { 'text': str, 'prompt_tokens': int, 'completion_tokens': int, 'total_tokens': int }
         """
         if self.current_model is None or self.current_tokenizer is None:
             raise RuntimeError("No model loaded. Call load_model() first.")
-        
+
         try:
-            # Get system prompt from config if not provided
             if system_prompt is None:
                 model_config = self.config_manager.get_model_config(self.current_model_name)
                 system_prompt = model_config.get('system_prompt', '')
-            
-            # Format the conversation
+
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
-            
-            # Apply chat template
+
             formatted_prompt = self.current_tokenizer.apply_chat_template(
-                messages, 
-                tokenize=False, 
+                messages,
+                tokenize=False,
                 add_generation_prompt=True
             )
-            
-            # Tokenize
-            inputs = self.current_tokenizer(
-                formatted_prompt, 
-                return_tensors="pt", 
-                padding=True, 
+
+            # Tokenize once for prompt tokens
+            prompt_enc = self.current_tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                padding=False,
                 truncation=True
             )
-            
-            # Move inputs to device
-            inputs = {k: v.to(self.current_model.device) for k, v in inputs.items()}
-            
-            # Generate
-            with torch.no_grad():
+            input_ids = prompt_enc['input_ids']
+            prompt_token_count = input_ids.shape[1]
+
+            prompt_enc = {k: v.to(self.current_model.device) for k, v in prompt_enc.items()}
+
+            # Clone generation config (avoid mutating global). GenerationConfig has no .copy(); use deepcopy.
+            if self.generation_config:
+                gen_cfg = copy.deepcopy(self.generation_config)
+            else:
+                gen_cfg = GenerationConfig()
+
+            if override_params:
+                for k, v in override_params.items():
+                    if hasattr(gen_cfg, k) and v is not None:
+                        setattr(gen_cfg, k, v)
+
+            with torch.inference_mode():
                 outputs = self.current_model.generate(
-                    **inputs,
-                    generation_config=self.generation_config,
+                    **prompt_enc,
+                    generation_config=gen_cfg,
                     pad_token_id=self.current_tokenizer.eos_token_id
                 )
-            
-            # Decode response
-            response = self.current_tokenizer.decode(
-                outputs[0][inputs['input_ids'].shape[1]:], 
-                skip_special_tokens=True
-            )
-            
-            return response.strip()
-            
+
+            full_output_ids = outputs[0]
+            generated_ids = full_output_ids[prompt_token_count:]
+            completion_token_count = generated_ids.shape[0]
+            text = self.current_tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+
+            return {
+                'text': text,
+                'prompt_tokens': int(prompt_token_count),
+                'completion_tokens': int(completion_token_count),
+                'total_tokens': int(prompt_token_count + completion_token_count)
+            }
         except Exception as e:
             self.logger.error(f"Failed to generate response: {str(e)}")
-            return f"Error generating response: {str(e)}"
+            return {
+                'text': f"Error generating response: {str(e)}",
+                'prompt_tokens': 0,
+                'completion_tokens': 0,
+                'total_tokens': 0
+            }
+
+    def stream_response(self, prompt: str, system_prompt: Optional[str] = None,
+                        override_params: Optional[Dict[str, Any]] = None,
+                        chunk_size: int = 8) -> Generator[Dict[str, Any], None, None]:
+        """Streaming token/segment generator (simple greedy chunking).
+
+        Yields dicts: { 'event': 'chunk', 'text': str } ... then final summary with token counts.
+        NOTE: This is a naive implementation (not incremental model.generate streaming). It slices decoded text.
+        For true token-level streaming, need incremental decoding loop or different backend (e.g., vLLM).
+        """
+        result = self.generate_response(prompt, system_prompt, override_params)
+        text = result['text']
+        if text.startswith("Error generating"):
+            yield {"event": "error", "text": text}
+            return
+        # Naive segmentation
+        for i in range(0, len(text), chunk_size):
+            yield {"event": "chunk", "text": text[i:i+chunk_size]}
+        yield {"event": "end", **result}
     
     def get_current_model_info(self) -> Dict[str, Any]:
         """Get information about the currently loaded model.

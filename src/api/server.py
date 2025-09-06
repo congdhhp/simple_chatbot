@@ -3,13 +3,14 @@
 import sys
 import os
 import logging
+import uuid
 import click
 import uvicorn
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -27,6 +28,15 @@ from src.api.models import ErrorResponse
 from src.api.routes import chat, completions, models, health, auth, monitoring
 from src.api.middleware.logging import setup_logging
 from src.api.middleware.monitoring import metrics_middleware, metrics_collector
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+# Prometheus metrics definitions (guard against double import via different module names)
+if 'METRICS_REGISTERED' not in globals():
+    REQUEST_COUNTER = Counter('llm_requests_total', 'Total LLM API requests', ['endpoint', 'model'])
+    TOKEN_COUNTER = Counter('llm_tokens_total', 'Tokens processed', ['type', 'model'])
+    LATENCY_HIST = Histogram('llm_request_latency_seconds', 'Request latency seconds', ['endpoint'])
+    INFLIGHT = Gauge('llm_inflight_requests', 'In-flight LLM requests')
+    METRICS_REGISTERED = True
 from src.api.middleware.rate_limit import check_rate_limits
 
 # Global instances
@@ -104,6 +114,15 @@ app.add_middleware(
     allowed_hosts=["*"]  # Configure as needed
 )
 
+# Request ID middleware (placed early)
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    req_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    request.state.request_id = req_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
 # Add metrics middleware
 @app.middleware("http")
 async def add_metrics_middleware(request: Request, call_next):
@@ -162,6 +181,10 @@ app.include_router(models.router, prefix="/v1", tags=["Models"])
 app.include_router(completions.router, prefix="/v1", tags=["Completions"])
 app.include_router(chat.router, prefix="/v1", tags=["Chat"])
 
+@app.get('/metrics')
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -193,16 +216,28 @@ def main(host, port, workers, reload, log_level, config):
     logging.info(f"Workers: {workers}")
     logging.info(f"Reload: {reload}")
     
-    # Start server
-    uvicorn.run(
-        "src.api.server:app",
-        host=host,
-        port=port,
-        workers=workers if not reload else 1,
-        reload=reload,
-        log_level=log_level,
-        access_log=True
-    )
+    # Start server without module string to avoid double import (prevents duplicate Prometheus metric registration)
+    # Note: reload with an app instance is not supported; if reload requested, fall back to module string
+    if reload:
+        uvicorn.run(
+            "src.api.server:app",
+            host=host,
+            port=port,
+            workers=1,  # reload incompatible with multiple workers
+            reload=True,
+            log_level=log_level,
+            access_log=True
+        )
+    else:
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            workers=workers,
+            reload=False,
+            log_level=log_level,
+            access_log=True
+        )
 
 if __name__ == "__main__":
     main()
