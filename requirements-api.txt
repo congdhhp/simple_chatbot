@@ -18,6 +18,7 @@ redis==5.0.1
 # Additional utilities
 python-dotenv==1.0.0
 aiofiles==23.2.1
+prometheus-client==0.20.0  # Metrics export (/metrics)
 
 # Production dependencies
 gunicorn==21.2.0

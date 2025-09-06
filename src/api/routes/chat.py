@@ -7,13 +7,19 @@ import os
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from src.api.models import (
-    ChatCompletionRequest, 
-    ChatCompletionResponse, 
-    ChatChoice, 
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatChoice,
     ChatMessage,
     Usage
 )
 from src.api.middleware.auth import optional_auth, require_auth
+from prometheus_client import Counter, Histogram, Gauge
+import time
+
+CHAT_LATENCY = Histogram('llm_chat_latency_seconds', 'Latency for chat completions')
+CHAT_FIRST_TOKEN = Histogram('llm_chat_time_to_first_token_seconds', 'Time to first token (simulated)')
+CHAT_REQUESTS = Counter('llm_chat_requests_total', 'Chat completion requests', ['model'])
 from src.api.middleware.monitoring import metrics_collector
 
 router = APIRouter()
@@ -46,92 +52,119 @@ async def create_chat_completion(
     current_user: dict = Depends(optional_auth)
 ):
     """Create chat completion - OpenAI compatible."""
-    
     model_manager = getattr(request.app.state, 'model_manager', None)
     config_manager = getattr(request.app.state, 'config_manager', None)
-    
+
     if not all([model_manager, config_manager]):
         raise HTTPException(status_code=500, detail="Service components not available")
-    
-    try:
-        # Check if requested model is available
-        available_models = config_manager.get_available_models()
-        if request_data.model not in available_models:
-            raise HTTPException(status_code=404, detail=f"Model {request_data.model} not found")
-        
-        # Load model if different from current
-        if model_manager.current_model_name != request_data.model:
-            if not model_manager.load_model(request_data.model):
-                raise HTTPException(status_code=500, detail=f"Failed to load model {request_data.model}")
-        
-        # Check if model is loaded
-        if not model_manager.current_model:
-            raise HTTPException(status_code=500, detail="No model loaded")
-        
-        # Convert messages to prompt
-        prompt = format_chat_messages(request_data.messages)
-        
-        # Update generation config with request parameters
-        generation_config = model_manager.generation_config
-        if generation_config:
-            if request_data.max_tokens:
-                generation_config.max_new_tokens = request_data.max_tokens
-            if request_data.temperature is not None:
-                generation_config.temperature = request_data.temperature
-            if request_data.top_p is not None:
-                generation_config.top_p = request_data.top_p
-            if request_data.top_k is not None:
-                generation_config.top_k = request_data.top_k
-        
-        # Get system prompt from last system message or model config
-        system_prompt = None
-        for message in reversed(request_data.messages):
-            if message.role == "system":
-                system_prompt = message.content
-                break
-        
-        # Generate response
-        response_text = model_manager.generate_response(prompt, system_prompt)
-        
-        if not response_text:
-            raise HTTPException(status_code=500, detail="Failed to generate response")
-        
-        # Record model usage for metrics
-        metrics_collector.record_model_usage(request_data.model)
-        
-        # Store user info for metrics
-        if current_user:
-            request.state.user = current_user
-        
-        # Estimate token usage
-        prompt_tokens = estimate_tokens(prompt)
-        completion_tokens = estimate_tokens(response_text)
-        
-        # Create response
-        chat_response = ChatCompletionResponse(
-            id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
-            model=request_data.model,
-            choices=[
-                ChatChoice(
-                    index=0,
-                    message=ChatMessage(
-                        role="assistant",
-                        content=response_text
-                    ),
-                    finish_reason="stop"
-                )
-            ],
-            usage=Usage(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens
+
+    # Validate model
+    available_models = config_manager.get_available_models()
+    if request_data.model not in available_models:
+        raise HTTPException(status_code=404, detail=f"Model {request_data.model} not found")
+
+    # Load if needed
+    if model_manager.current_model_name != request_data.model:
+        if not model_manager.load_model(request_data.model):
+            raise HTTPException(status_code=500, detail=f"Failed to load model {request_data.model}")
+
+    if not model_manager.current_model:
+        raise HTTPException(status_code=500, detail="No model loaded")
+
+    prompt = format_chat_messages(request_data.messages)
+
+    system_prompt = None
+    for message in reversed(request_data.messages):
+        if message.role == "system":
+            system_prompt = message.content
+            break
+
+    override_params = {
+        'max_new_tokens': request_data.max_tokens,
+        'temperature': request_data.temperature,
+        'top_p': request_data.top_p,
+        'top_k': request_data.top_k
+    }
+
+    start_time = time.time()
+
+    # Streaming mode
+    if request_data.stream:
+        def event_stream():
+            CHAT_REQUESTS.labels(model=request_data.model).inc()
+            first_chunk_time = None
+            try:
+                for chunk in model_manager.stream_response(prompt, system_prompt, override_params):
+                    if chunk.get("event") == "chunk":
+                        if first_chunk_time is None:
+                            first_chunk_time = time.time()
+                            CHAT_FIRST_TOKEN.observe(first_chunk_time - start_time)
+                        yield f"data: {{\"id\": \"stream\", \"object\": \"chat.completion.chunk\", \"choices\":[{{\"delta\":{{\"content\":{chunk['text']!r}}}, \"index\":0, \"finish_reason\":null}}]}}\n\n"
+                    elif chunk.get("event") == "error":
+                        yield f"data: {{\"error\": {chunk['text']!r}}}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
+                    elif chunk.get("event") == "end":
+                        usage_obj = {
+                            "prompt_tokens": chunk['prompt_tokens'],
+                            "completion_tokens": chunk['completion_tokens'],
+                            "total_tokens": chunk['total_tokens']
+                        }
+                        final_payload = {
+                            "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                            "object": "chat.completion",
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "message": {"role": "assistant", "content": chunk['text']},
+                                    "finish_reason": "stop"
+                                }
+                            ],
+                            "usage": usage_obj
+                        }
+                        import json
+                        yield "data: " + json.dumps(final_payload) + "\n\n"
+                        yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
+                yield "data: [DONE]\n\n"
+            finally:
+                CHAT_LATENCY.observe(time.time() - start_time)
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    # Non-streaming path
+    gen = model_manager.generate_response(prompt, system_prompt, override_params)
+    response_text = gen['text']
+    if not response_text or response_text.startswith("Error generating"):
+        raise HTTPException(status_code=500, detail="Failed to generate response")
+
+    metrics_collector.record_model_usage(request_data.model)
+    if current_user:
+        request.state.user = current_user
+
+    prompt_tokens = gen['prompt_tokens']
+    completion_tokens = gen['completion_tokens']
+
+    chat_response = ChatCompletionResponse(
+        id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        model=request_data.model,
+        choices=[
+            ChatChoice(
+                index=0,
+                message=ChatMessage(
+                    role="assistant",
+                    content=response_text
+                ),
+                finish_reason="stop"
             )
+        ],
+        usage=Usage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens
         )
-        
-        return chat_response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error in chat completion: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    )
+
+    CHAT_REQUESTS.labels(model=request_data.model).inc()
+    CHAT_LATENCY.observe(time.time() - start_time)
+    return chat_response
