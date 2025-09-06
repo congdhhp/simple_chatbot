@@ -136,15 +136,22 @@ async def create_completion(
             finish_reason="stop"
         ))
 
+    # Calculate metrics
+    duration = time.time() - start_time
+    tokens_per_second = total_completion_tokens / duration if duration > 0 else 0
+
     completion_response = CompletionResponse(
         id=f"cmpl-{uuid.uuid4().hex[:8]}",
         model=request_data.model,
         choices=choices,
         usage=Usage(
             prompt_tokens=total_prompt_tokens,
-            completion_tokens=total_completion_tokens,
-            total_tokens=total_prompt_tokens + total_completion_tokens
-        )
+            completion_tokens=total_completion_tokens, 
+            total_tokens=total_prompt_tokens + total_completion_tokens,
+            tokens_per_second=round(tokens_per_second, 2),
+            latency_ms=round(duration * 1000, 2)
+        ),
+        system_fingerprint=f"simple-llm-v1.0-{request_data.model}"
     )
 
     COMPL_REQUESTS.labels(model=request_data.model).inc()

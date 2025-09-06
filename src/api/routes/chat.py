@@ -144,6 +144,10 @@ async def create_chat_completion(
 
     prompt_tokens = gen['prompt_tokens']
     completion_tokens = gen['completion_tokens']
+    duration = time.time() - start_time
+    
+    # Calculate tokens per second
+    tokens_per_second = completion_tokens / duration if duration > 0 else 0
 
     chat_response = ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -161,8 +165,11 @@ async def create_chat_completion(
         usage=Usage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens
-        )
+            total_tokens=prompt_tokens + completion_tokens,
+            tokens_per_second=round(tokens_per_second, 2),
+            latency_ms=round(duration * 1000, 2)
+        ),
+        system_fingerprint=f"simple-llm-v1.0-{request_data.model}"
     )
 
     CHAT_REQUESTS.labels(model=request_data.model).inc()
