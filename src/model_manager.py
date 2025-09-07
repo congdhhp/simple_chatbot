@@ -4,6 +4,7 @@ import os
 import torch
 import logging
 import copy
+import asyncio
 from typing import Dict, Any, Optional, Tuple, Generator
 from transformers import (
     AutoTokenizer,
@@ -65,6 +66,19 @@ class ModelManager:
             self.logger.warning("Flash Attention not available. Install with: pip install flash-attn")
         
         self.flash_attn_enabled = False
+        # Async lock to serialize model load/unload
+        self._load_lock = asyncio.Lock()
+
+    async def async_load_model(self, model_name: Optional[str] = None) -> bool:
+        """Async variant of load_model with concurrency control.
+
+        Returns True if the model is loaded (or already loaded), else False.
+        """
+        async with self._load_lock:
+            # Fast path if already loaded
+            if model_name is not None and self.current_model_name == model_name and self.current_model is not None:
+                return True
+            return await asyncio.to_thread(self.load_model, model_name)
 
     def _is_lora_adapter(self, path: str) -> bool:
         """Check if a path contains a LoRA adapter.

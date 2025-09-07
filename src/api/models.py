@@ -63,6 +63,8 @@ class Usage(BaseModel):
     # Wave 1 Enhancement: Add metadata for monitoring
     tokens_per_second: Optional[float] = None
     latency_ms: Optional[float] = None
+    time_to_first_token_ms: Optional[float] = None  # Wave 2: latency to first streamed token (or full latency fallback)
+    cost_usd: Optional[float] = None  # Wave 2: optional cost estimation
 
 class ChatCompletionResponse(BaseModel):
     """Chat completion response model - OpenAI compatible."""

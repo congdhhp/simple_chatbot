@@ -9,7 +9,7 @@ import json
 import time
 from typing import Optional
 
-API_BASE = "http://localhost:8000"
+API_BASE = "http://localhost:8008"
 
 class APITester:
     """Advanced API testing class."""

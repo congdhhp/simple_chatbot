@@ -425,3 +425,51 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Hugging Face Transformers](https://huggingface.co/transformers/) for the model infrastructure
 - [Rich](https://rich.readthedocs.io/) for the beautiful CLI interface
 - [Click](https://click.palletsprojects.com/) for command-line interface framework
+
+---
+
+## API Service Extensions (Wave 1 & Wave 2)
+
+The repository now also includes an OpenAI-compatible FastAPI inference service with production-focused enhancements:
+
+### Core (Wave 1)
+- Chat & text completion endpoints with SSE streaming
+- Precise token accounting (prompt vs completion)
+- Prometheus metrics (`/metrics`)
+- Request ID injection & basic middleware layering
+- Conversation & multi-model management
+
+### Hardening (Wave 2)
+- Centralized error handling middleware (standard JSON envelope)
+- Async model loading + optional bulk preload (`PRELOAD_ALL_MODELS=true`)
+- Degraded startup mode surfaced via health/readiness
+- Streaming heartbeat & time-to-first-token metrics
+- Usage object enriched: `latency_ms`, `tokens_per_second`, `time_to_first_token_ms`, `cost_usd`
+- Cost estimation via env: `COST_PER_1K_PROMPT_TOKENS`, `COST_PER_1K_COMPLETION_TOKENS`
+- Structured JSON logging (`JSON_LOGS=true`)
+- Config validation endpoint: `/admin/config/validate`
+- Rate limit exceeded counter: `llm_rate_limit_exceeded_total`
+- Access logging middleware with request/context enrichment
+
+### Relevant Environment Variables
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| PRELOAD_ALL_MODELS | Load all configured models at startup | false |
+| JSON_LOGS | Enable structured JSON logging | false |
+| COST_PER_1K_PROMPT_TOKENS | USD rate for prompt tokens | 0 |
+| COST_PER_1K_COMPLETION_TOKENS | USD rate for completion tokens | 0 |
+
+### Additional Metrics
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| llm_chat_latency_seconds | (none) | Chat completion latency histogram |
+| llm_chat_time_to_first_token_seconds | (none) | Time to first streamed token |
+| llm_chat_tokens_total | type, model | Prompt vs completion token counts (chat) |
+| llm_completion_latency_seconds | (none) | Text completion latency |
+| llm_completion_tokens_total | type, model | Prompt vs completion token counts (text) |
+| llm_rate_limit_exceeded_total | period | Rate limit rejects by window |
+
+### Cost Estimation
+Set per‑1000 token rates in USD; the service computes `cost_usd` in the `usage` block for both streaming and non-stream responses.
+
+---
