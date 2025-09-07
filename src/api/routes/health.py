@@ -12,7 +12,7 @@ from src.api.models import HealthResponse
 
 router = APIRouter()
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/", response_model=HealthResponse)
 async def health_check(request: Request):
     """Health check endpoint (reports degraded if startup failed)."""
     model_manager = getattr(request.app.state, 'model_manager', None)
@@ -28,7 +28,7 @@ async def health_check(request: Request):
         return {**resp.model_dump(), "degraded_reason": degraded_reason}
     return resp
 
-@router.get("/health/ready")
+@router.get("/ready")
 async def readiness_check(request: Request):
     """Readiness check with additional resource validations."""
     model_manager = getattr(request.app.state, 'model_manager', None)
@@ -61,12 +61,12 @@ async def readiness_check(request: Request):
 
     return {"status": "ready"}
 
-@router.get("/health/live")
+@router.get("/live")
 async def liveness_check():
     """Liveness check for Kubernetes."""
     return {"status": "alive"}
 
-@router.get("/health/detailed")
+@router.get("/detailed")
 async def detailed_health_check(request: Request):
     """Detailed health check with system metrics."""
     try:

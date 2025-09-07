@@ -32,7 +32,7 @@ class UserInfo(BaseModel):
     permissions: list
     is_active: bool
 
-@router.post("/auth/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Login endpoint."""
     user = authenticate_user(request.username, request.password)
@@ -60,7 +60,7 @@ async def login(request: LoginRequest):
         }
     )
 
-@router.get("/auth/me", response_model=UserInfo)
+@router.get("/me", response_model=UserInfo)
 async def get_current_user_info(current_user: dict = Depends(require_auth)):
     """Get current user information."""
     if current_user.get("type") == "api_key":
@@ -76,7 +76,7 @@ async def get_current_user_info(current_user: dict = Depends(require_auth)):
             is_active=True
         )
 
-@router.post("/auth/logout")
+@router.post("/logout")
 async def logout(current_user: dict = Depends(require_auth)):
     """Logout endpoint (token invalidation)."""
     # In a real implementation, you would add the token to a blacklist
@@ -84,7 +84,7 @@ async def logout(current_user: dict = Depends(require_auth)):
     logging.info(f"User logged out: {current_user}")
     return {"message": "Successfully logged out"}
 
-@router.get("/auth/permissions")
+@router.get("/permissions")
 async def check_permissions(current_user: dict = Depends(require_auth)):
     """Check user permissions."""
     return {

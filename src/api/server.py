@@ -24,8 +24,10 @@ sys.path.insert(0, str(parent_path))
 from src.config_manager import ConfigManager
 from src.model_manager import ModelManager
 from src.conversation_manager import ConversationManager
+from src.model_registry import ModelRegistry
+from src.safety import create_safety_pipeline
 from src.api.models import ErrorResponse
-from src.api.routes import chat, completions, models, health, auth, monitoring
+from src.api.routes import chat, completions, models, health, auth, monitoring, registry
 from src.api.middleware.logging import setup_logging
 from src.api.middleware.monitoring import metrics_collector  # legacy collector (middleware removed)
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
@@ -42,13 +44,14 @@ from src.api.middleware.rate_limit import check_rate_limits
 
 # Global instances
 config_manager = None
-model_manager = None
+model_registry = None  # Changed from model_manager to model_registry
 conversation_manager = None
+safety_pipeline = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with model preload & degraded flag."""
-    global config_manager, model_manager, conversation_manager
+    """Application lifespan manager with model registry & safety pipeline."""
+    global config_manager, model_registry, conversation_manager, safety_pipeline
 
     app.state.degraded = False
     app.state.degraded_reason = None
@@ -56,33 +59,53 @@ async def lifespan(app: FastAPI):
 
     try:
         config_manager = ConfigManager()
-        model_manager = ModelManager(config_manager)
+        
+        # Initialize model registry with memory budget
+        max_models = int(os.getenv('MAX_MODELS', '3'))
+        memory_budget_gb = float(os.getenv('MEMORY_BUDGET_GB', '14.0'))
+        model_registry = ModelRegistry(config_manager, max_models, memory_budget_gb)
+        
         conversation_manager = ConversationManager(config_manager)
+        
+        # Initialize safety pipeline
+        safety_config = {
+            'safety_level': os.getenv('SAFETY_LEVEL', 'moderate'),
+            'enable_pii_detection': os.getenv('ENABLE_PII_DETECTION', 'true').lower() == 'true'
+        }
+        safety_pipeline = create_safety_pipeline(safety_config)
 
+        # Load default model through registry
         default_model = config_manager.get_default_model()
-        logging.info(f"Loading default model: {default_model}")
-        if not await model_manager.async_load_model(default_model):
+        logging.info(f"Loading default model through registry: {default_model}")
+        default_model_manager = await model_registry.get_model(default_model)
+        
+        if not default_model_manager:
             logging.error(f"Failed to load default model: {default_model}")
             app.state.degraded = True
             app.state.degraded_reason = 'default_model_load_failed'
         else:
-            logging.info("Default model loaded successfully")
+            logging.info("Default model loaded successfully through registry")
             conversation_manager.set_current_model(default_model)
 
-        # Optionally preload other models
+        # Optionally preload other models through registry
         if preload_all and not app.state.degraded:
-            for name in config_manager.get_available_models().keys():
-                if name == default_model:
-                    continue
-                logging.info(f"Preloading model: {name}")
-                success = await model_manager.async_load_model(name)
-                if not success:
-                    logging.warning(f"Failed to preload model {name}")
+            other_models = [name for name in config_manager.get_available_models().keys() 
+                          if name != default_model]
+            if other_models:
+                logging.info(f"Preloading models through registry: {other_models}")
+                await model_registry.preload_models(other_models[:max_models-1])  # Leave room for default
 
         app.state.config_manager = config_manager
-        app.state.model_manager = model_manager
+        app.state.model_registry = model_registry
         app.state.conversation_manager = conversation_manager
-        logging.info("Simple LLM Service startup completed")
+        app.state.safety_pipeline = safety_pipeline
+        
+        # Log registry stats
+        stats = model_registry.get_registry_stats()
+        logging.info(f"Model registry initialized: {stats['loaded_models']} models loaded, "
+                    f"{stats['estimated_memory_usage_mb']:.1f}MB estimated usage")
+        
+        logging.info("Simple LLM Service startup completed with enhanced Wave 2 features")
     except Exception as e:
         logging.error(f"Failed to initialize service: {e}")
         app.state.degraded = True
@@ -92,9 +115,9 @@ async def lifespan(app: FastAPI):
     yield
 
     try:
-        if model_manager and model_manager.current_model:
-            model_manager.unload_model()
-            logging.info("Models unloaded")
+        if model_registry:
+            await model_registry.clear_registry()
+            logging.info("Model registry cleared")
         logging.info("Simple LLM Service shutdown completed")
     except Exception as e:
         logging.error(f"Error during shutdown: {e}")
@@ -191,12 +214,13 @@ async def add_rate_limiting_middleware(request: Request, call_next):
 # (Removed per Wave 2: centralized error middleware handles exceptions)
 
 # Include routers
-app.include_router(health.router, tags=["Health"])
-app.include_router(auth.router, tags=["Authentication"])
-app.include_router(monitoring.router, prefix="/admin", tags=["Monitoring"])
-app.include_router(models.router, prefix="/v1", tags=["Models"])
-app.include_router(completions.router, prefix="/v1", tags=["Completions"])
-app.include_router(chat.router, prefix="/v1", tags=["Chat"])
+app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(models.router, prefix="/v1", tags=["models"])
+app.include_router(completions.router, prefix="/v1", tags=["completions"])
+app.include_router(chat.router, prefix="/v1", tags=["chat"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(monitoring.router, prefix="/admin", tags=["monitoring"])
+app.include_router(registry.router, prefix="/admin", tags=["registry"])
 
 @app.get('/metrics')
 async def metrics():
