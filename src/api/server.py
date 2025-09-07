@@ -27,8 +27,9 @@ from src.conversation_manager import ConversationManager
 from src.api.models import ErrorResponse
 from src.api.routes import chat, completions, models, health, auth, monitoring
 from src.api.middleware.logging import setup_logging
-from src.api.middleware.monitoring import metrics_middleware, metrics_collector
+from src.api.middleware.monitoring import metrics_collector  # legacy collector (middleware removed)
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from src.api.middleware.error_handling import ErrorHandlingMiddleware
 
 # Prometheus metrics definitions (guard against double import via different module names)
 if 'METRICS_REGISTERED' not in globals():
@@ -46,42 +47,50 @@ conversation_manager = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Startup
+    """Application lifespan manager with model preload & degraded flag."""
     global config_manager, model_manager, conversation_manager
-    
+
+    app.state.degraded = False
+    app.state.degraded_reason = None
+    preload_all = os.getenv('PRELOAD_ALL_MODELS', 'false').lower() == 'true'
+
     try:
-        # Initialize core components
         config_manager = ConfigManager()
         model_manager = ModelManager(config_manager)
         conversation_manager = ConversationManager(config_manager)
-        
-        # Load default model
+
         default_model = config_manager.get_default_model()
         logging.info(f"Loading default model: {default_model}")
-        
-        if not model_manager.load_model(default_model):
+        if not await model_manager.async_load_model(default_model):
             logging.error(f"Failed to load default model: {default_model}")
+            app.state.degraded = True
+            app.state.degraded_reason = 'default_model_load_failed'
         else:
             logging.info("Default model loaded successfully")
-            
-        # Set model for conversation manager
-        conversation_manager.set_current_model(default_model)
-        
-        # Store in app state
+            conversation_manager.set_current_model(default_model)
+
+        # Optionally preload other models
+        if preload_all and not app.state.degraded:
+            for name in config_manager.get_available_models().keys():
+                if name == default_model:
+                    continue
+                logging.info(f"Preloading model: {name}")
+                success = await model_manager.async_load_model(name)
+                if not success:
+                    logging.warning(f"Failed to preload model {name}")
+
         app.state.config_manager = config_manager
         app.state.model_manager = model_manager
         app.state.conversation_manager = conversation_manager
-        
         logging.info("Simple LLM Service startup completed")
-        
     except Exception as e:
         logging.error(f"Failed to initialize service: {e}")
+        app.state.degraded = True
+        app.state.degraded_reason = f"startup_exception:{e}"
         raise
-    
+
     yield
-    
-    # Shutdown
+
     try:
         if model_manager and model_manager.current_model:
             model_manager.unload_model()
@@ -114,6 +123,9 @@ app.add_middleware(
     allowed_hosts=["*"]  # Configure as needed
 )
 
+# Central error handling (Wave 2)
+app.add_middleware(ErrorHandlingMiddleware)
+
 # Request ID middleware (placed early)
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
@@ -123,11 +135,44 @@ async def request_id_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = req_id
     return response
 
+# Structured access logging middleware (Wave 2)
+@app.middleware("http")
+async def access_logging_middleware(request: Request, call_next):
+    import time as _t
+    start = _t.time()
+    path = request.url.path
+    model = None
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception as e:  # let error middleware wrap, still log here
+        status = getattr(e, 'status_code', 500)
+        raise
+    finally:
+        duration_ms = ( _t.time() - start) * 1000
+        # Extract token usage if set on state by routes later (could be extended)
+        extra = {
+            'request_id': getattr(request.state, 'request_id', None),
+            'endpoint': path,
+            'model': getattr(request.state, 'model', None),
+            'latency_ms': round(duration_ms,2),
+            'user': getattr(getattr(request.state, 'user', None) or {}, 'get', lambda *_: None)("username") if hasattr(getattr(request.state, 'user', None), 'get') else None,
+            'status_code': status
+        }
+        import logging as _l
+        _l.getLogger("access").info(f"{path} {status} {duration_ms:.2f}ms", extra=extra)
+    return response
+
 # Add metrics middleware
 @app.middleware("http")
-async def add_metrics_middleware(request: Request, call_next):
-    """Add metrics collection middleware."""
-    return await metrics_middleware(request, call_next)
+async def inflight_middleware(request: Request, call_next):
+    """Track inflight requests only (legacy in-memory metrics middleware removed)."""
+    INFLIGHT.inc()
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        INFLIGHT.dec()
 
 # Add rate limiting middleware
 @app.middleware("http") 
@@ -143,35 +188,7 @@ async def add_rate_limiting_middleware(request: Request, call_next):
     
     return await call_next(request)
 
-# Exception handlers
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error={
-                "message": exc.detail,
-                "type": "http_error",
-                "code": exc.status_code
-            }
-        ).dict()
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions."""
-    logging.error(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content=ErrorResponse(
-            error={
-                "message": "Internal server error",
-                "type": "internal_error",
-                "code": 500
-            }
-        ).dict()
-    )
+# (Removed per Wave 2: centralized error middleware handles exceptions)
 
 # Include routers
 app.include_router(health.router, tags=["Health"])

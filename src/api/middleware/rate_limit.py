@@ -6,6 +6,12 @@ from typing import Dict, Optional
 from collections import defaultdict, deque
 from fastapi import Request, HTTPException, status
 from slowapi import Limiter, _rate_limit_exceeded_handler
+from prometheus_client import Counter
+
+# Prometheus metric for rate limit exceeded events
+if 'RATE_LIMIT_EXCEEDED' not in globals():
+    RATE_LIMIT_EXCEEDED = Counter('llm_rate_limit_exceeded_total', 'Number of requests rejected due to rate limiting', ['period'])
+    RATE_LIMIT_EXCEEDED_REGISTERED = True
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
@@ -133,6 +139,10 @@ async def check_rate_limits(request: Request) -> None:
         if not rate_limit_store.hit(key, window, limit):
             # Rate limit exceeded
             stats = rate_limit_store.get_window_stats(key, window)
+            try:
+                RATE_LIMIT_EXCEEDED.labels(period=period).inc()
+            except Exception:  # pragma: no cover - guard against duplicate metric registration edge cases
+                pass
             
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

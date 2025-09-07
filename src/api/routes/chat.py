@@ -14,13 +14,32 @@ from src.api.models import (
     Usage
 )
 from src.api.middleware.auth import optional_auth, require_auth
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Histogram
 import time
 
 CHAT_LATENCY = Histogram('llm_chat_latency_seconds', 'Latency for chat completions')
 CHAT_FIRST_TOKEN = Histogram('llm_chat_time_to_first_token_seconds', 'Time to first token (simulated)')
 CHAT_REQUESTS = Counter('llm_chat_requests_total', 'Chat completion requests', ['model'])
+CHAT_TOKENS = Counter('llm_chat_tokens_total', 'Chat tokens processed', ['type', 'model'])  # label type values: 'prompt' | 'completion'
 from src.api.middleware.monitoring import metrics_collector
+
+# Warn once if cost env vars not set (to prevent silent zero cost)
+_COST_ENV_WARNED = False
+def _warn_cost_env_once():
+    global _COST_ENV_WARNED
+    if _COST_ENV_WARNED:
+        return
+    import os, logging
+    try:
+        p = float(os.getenv('COST_PER_1K_PROMPT_TOKENS', '0'))
+        c = float(os.getenv('COST_PER_1K_COMPLETION_TOKENS', '0'))
+    except ValueError:
+        p = c = 0.0
+    if p <= 0 and c <= 0:
+        logging.getLogger(__name__).warning("Cost env vars unset or zero; cost_usd will remain 0. Set COST_PER_1K_PROMPT_TOKENS and COST_PER_1K_COMPLETION_TOKENS to enable cost estimation.")
+    _COST_ENV_WARNED = True
+
+_warn_cost_env_once()
 
 router = APIRouter()
 
@@ -63,9 +82,10 @@ async def create_chat_completion(
     if request_data.model not in available_models:
         raise HTTPException(status_code=404, detail=f"Model {request_data.model} not found")
 
-    # Load if needed
+    # Load if needed (async)
     if model_manager.current_model_name != request_data.model:
-        if not model_manager.load_model(request_data.model):
+        loaded = await model_manager.async_load_model(request_data.model)
+        if not loaded:
             raise HTTPException(status_code=500, detail=f"Failed to load model {request_data.model}")
 
     if not model_manager.current_model:
@@ -93,8 +113,17 @@ async def create_chat_completion(
         def event_stream():
             CHAT_REQUESTS.labels(model=request_data.model).inc()
             first_chunk_time = None
+            heartbeat_interval = float(os.getenv('SSE_HEARTBEAT_INTERVAL', '5'))  # seconds
+            last_heartbeat = 0.0
             try:
+                # Initial heartbeat (Wave 2)
+                yield 'data: {"event":"heartbeat"}' + "\n\n"
+                last_heartbeat = time.time()
                 for chunk in model_manager.stream_response(prompt, system_prompt, override_params):
+                    now = time.time()
+                    if now - last_heartbeat >= heartbeat_interval:
+                        yield 'data: {"event":"heartbeat"}' + "\n\n"
+                        last_heartbeat = now
                     if chunk.get("event") == "chunk":
                         if first_chunk_time is None:
                             first_chunk_time = time.time()
@@ -110,6 +139,12 @@ async def create_chat_completion(
                             "completion_tokens": chunk['completion_tokens'],
                             "total_tokens": chunk['total_tokens']
                         }
+                        CHAT_TOKENS.labels(type='prompt', model=request_data.model).inc(chunk['prompt_tokens'])
+                        CHAT_TOKENS.labels(type='completion', model=request_data.model).inc(chunk['completion_tokens'])
+                        ttfb_ms = (first_chunk_time - start_time) * 1000 if first_chunk_time else None
+                        usage_obj["time_to_first_token_ms"] = ttfb_ms
+                        duration = time.time() - start_time
+                        tokens_per_second = chunk['completion_tokens'] / duration if duration > 0 else 0
                         final_payload = {
                             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
                             "object": "chat.completion",
@@ -120,7 +155,7 @@ async def create_chat_completion(
                                     "finish_reason": "stop"
                                 }
                             ],
-                            "usage": usage_obj
+                            "usage": {**usage_obj, "tokens_per_second": round(tokens_per_second, 2)}
                         }
                         import json
                         yield "data: " + json.dumps(final_payload) + "\n\n"
@@ -144,10 +179,24 @@ async def create_chat_completion(
 
     prompt_tokens = gen['prompt_tokens']
     completion_tokens = gen['completion_tokens']
+    CHAT_TOKENS.labels(type='prompt', model=request_data.model).inc(prompt_tokens)
+    CHAT_TOKENS.labels(type='completion', model=request_data.model).inc(completion_tokens)
     duration = time.time() - start_time
     
     # Calculate tokens per second
     tokens_per_second = completion_tokens / duration if duration > 0 else 0
+
+    # Time to first token for non-stream path approximated as full latency (Wave 2 fallback)
+    ttfb_ms = duration * 1000
+
+    # Cost estimation (env configurable). Defaults 0 if unset.
+    import os
+    try:
+        cost_prompt_rate = float(os.getenv('COST_PER_1K_PROMPT_TOKENS', '0'))
+        cost_completion_rate = float(os.getenv('COST_PER_1K_COMPLETION_TOKENS', '0'))
+    except ValueError:
+        cost_prompt_rate = cost_completion_rate = 0.0
+    cost_usd = ((prompt_tokens / 1000.0) * cost_prompt_rate) + ((completion_tokens / 1000.0) * cost_completion_rate)
 
     chat_response = ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -166,8 +215,10 @@ async def create_chat_completion(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
+            time_to_first_token_ms=round(ttfb_ms, 2),
+            latency_ms=round(duration * 1000, 2),
             tokens_per_second=round(tokens_per_second, 2),
-            latency_ms=round(duration * 1000, 2)
+            cost_usd=round(cost_usd, 6)
         ),
         system_fingerprint=f"simple-llm-v1.0-{request_data.model}"
     )

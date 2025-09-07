@@ -14,35 +14,51 @@ router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request):
-    """Health check endpoint."""
-    
+    """Health check endpoint (reports degraded if startup failed)."""
     model_manager = getattr(request.app.state, 'model_manager', None)
-    
-    # Check model status
+    degraded = getattr(request.app.state, 'degraded', False)
+    degraded_reason = getattr(request.app.state, 'degraded_reason', None) if degraded else None
     models_loaded = {}
-    if model_manager:
-        if model_manager.current_model_name:
-            models_loaded[model_manager.current_model_name] = True
-    
-    # Check CUDA status
-    cuda_available = torch.cuda.is_available()
-    
-    status = "healthy" if model_manager and model_manager.current_model else "degraded"
-    
-    return HealthResponse(
-        status=status,
-        models_loaded=models_loaded,
-        version="1.0.0"
-    )
+    if model_manager and model_manager.current_model_name:
+        models_loaded[model_manager.current_model_name] = True
+    status_val = "healthy" if (model_manager and model_manager.current_model and not degraded) else "degraded"
+    resp = HealthResponse(status=status_val, models_loaded=models_loaded, version="1.0.0")
+    # Attach degraded_reason inline if degraded (non-breaking extra field)
+    if degraded_reason:
+        return {**resp.model_dump(), "degraded_reason": degraded_reason}
+    return resp
 
 @router.get("/health/ready")
 async def readiness_check(request: Request):
-    """Readiness check for Kubernetes."""
+    """Readiness check with additional resource validations."""
     model_manager = getattr(request.app.state, 'model_manager', None)
-    
+    config_manager = getattr(request.app.state, 'config_manager', None)
+
+    if not config_manager:
+        return {"status": "not_ready", "reason": "config_unavailable"}
+
     if not model_manager or not model_manager.current_model:
-        return {"status": "not_ready", "reason": "no_model_loaded"}
-    
+        return {"status": "not_ready", "reason": "model_not_loaded"}
+    if getattr(request.app.state, 'degraded', False):
+        return {"status": "not_ready", "reason": getattr(request.app.state, 'degraded_reason', 'degraded')}
+
+    # Basic GPU memory headroom check
+    gpu_ok = True
+    headroom_reason = None
+    try:
+        if torch.cuda.is_available():
+            total = torch.cuda.get_device_properties(0).total_memory
+            allocated = torch.cuda.memory_allocated(0)
+            usage_ratio = allocated / total if total else 0
+            if usage_ratio > 0.95:
+                gpu_ok = False
+                headroom_reason = "gpu_memory_exhausted"
+    except Exception as e:
+        headroom_reason = f"gpu_check_error:{e}" if headroom_reason is None else headroom_reason
+
+    if not gpu_ok:
+        return {"status": "not_ready", "reason": headroom_reason}
+
     return {"status": "ready"}
 
 @router.get("/health/live")
